@@ -48,8 +48,10 @@ function renderTabs(s) {
     b.classList.toggle('on', p.id === s.provider);
     b.classList.toggle('unread', Boolean(s.unreadBy[p.id]));
     b.onclick = () => api.setProvider(p.id);
+    b.title = p.label;
     return b;
   }));
+  $('tabs').querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
 // ---------- cli chat ----------

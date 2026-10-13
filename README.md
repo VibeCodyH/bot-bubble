@@ -7,7 +7,10 @@ A small floating dot for your AI bots. Click it and a chat bubble opens with the
 It works with the bot products themselves, not their APIs, so it runs on the subscriptions you already pay for. Works with Dots, Muse, Grok Bot, ChatGPT, Claude, Gemini and other chat sites, plus agent CLIs like Claude Code and Codex.
 
 <p>
-  <img src="docs/bubble.png" alt="The bubble open on a Claude Code chat, with the bot bar and the dot below it" width="340">
+  <img src="docs/muse.png" alt="The bubble open on Muse, signed in, showing a weather question and Muse's reply" width="300">
+  <img src="docs/codex.png" alt="The bubble open on the Codex CLI tab, answering a git question" width="300">
+</p>
+<p>
   <img src="docs/settings.png" alt="Settings window listing five bots" width="480">
 </p>
 
