@@ -67,6 +67,8 @@ const inBrowser = (p) => p?.type === 'web' && p.browser === true; // lives in a 
 // An app's own window parked over the card. Needs Hyprland; elsewhere the tab shows an Open button.
 const parkedApp = (p) => p?.type === 'app' && p.park !== false && hypr.available;
 const external = (p) => inBrowser(p) || parkedApp(p);
+// The dot shows the default bot when one is set (that's what a click opens), else the active one.
+const dotProvider = () => enabled().find((p) => p.id === cfg.settings.defaultBot) || provider();
 const persist = () => saveState({ pos: state.pos, locked: state.locked, active: state.active, threads: state.threads });
 const thread = (id = state.active) => (state.threads[id] ||= { sessionId: null, messages: [] });
 
@@ -343,6 +345,7 @@ function publicState() {
     type: p.type,
     label: p.label,
     avatar: avatarFor(p),
+    dot: { label: dotProvider().label, avatar: avatarFor(dotProvider()) },
     locked: state.locked,
     expanded: state.expanded,
     anchor: state.anchor,
@@ -366,7 +369,7 @@ function broadcast() {
 let lookTimer = null;
 let lastLook = null;
 function updateLook() {
-  const av = state.pos && avatarFor(provider());
+  const av = state.pos && avatarFor(dotProvider());
   const want = Boolean(av?.kind === 'sprite' && av.meta?.grid);
   if (want && !lookTimer) {
     lookTimer = setInterval(async () => {

@@ -13,9 +13,8 @@ function render(s) {
 
   const inset = (layout.dot.size - 56) / 2;
   Object.assign($('dot').style, { left: `${layout.dot.x + inset}px`, top: `${layout.dot.y + inset}px` });
-  $('dot').title = s.label;
-  const av = s.avatar;
-  $('glyph').style.display = renderAvatar($('dot'), av) ? 'none' : '';
+  $('dot').title = s.dot.label;
+  $('glyph').style.display = renderAvatar($('dot'), s.dot.avatar) ? 'none' : '';
   $('badge').hidden = !s.unread;
   $('locked').hidden = !s.locked;
 
@@ -33,6 +32,7 @@ function render(s) {
   }
   if (s.type === 'web') $('web-hint').textContent = s.hint;
   if (s.type === 'app') {
+    const av = s.avatar;
     $('app-avatar').hidden = !av || av.kind !== 'img';
     if (av?.kind === 'img') $('app-avatar').src = av.url;
     $('app-name').textContent = s.label;
