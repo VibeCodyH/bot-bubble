@@ -156,7 +156,11 @@ async function show(p, bounds, dataDir, bridge) {
     w = { addr: c.address, pid: c.pid, shown: false };
     windows.set(p.id, w);
   }
-  if (!hypr.available) return;
+  if (hypr.available) await park(w, bounds);
+}
+
+// Hyprland: float and pin the window on the current workspace, over the card.
+async function park(w, bounds) {
   const window = `address:${w.addr}`;
   if (!w.shown) {
     const ws = await hypr.json('activeworkspace');
@@ -167,7 +171,81 @@ async function show(p, bounds, dataDir, bridge) {
   }
   w.bounds = bounds;
   await place(w.addr, bounds);
+  // An app may refuse to get as small as the card. Then let it grow away from the
+  // dot, and guard the size it actually took.
+  await new Promise((r) => setTimeout(r, 150)); // the app's minimum applies a moment later
+  const c = (await hypr.json('clients')).find((x) => x.address === w.addr);
+  if (c && (c.size[0] > bounds.width || c.size[1] > bounds.height)) {
+    const [width, height] = c.size;
+    w.bounds = {
+      x: bounds.right ? bounds.x + bounds.width - width : bounds.x,
+      y: bounds.bottom ? bounds.y + bounds.height - height : bounds.y,
+      width,
+      height,
+    };
+    await place(w.addr, w.bounds);
+  }
   watch();
+}
+
+// An app with no web client (Grok Bot): find its own window, or start it and wait,
+// then park it like a real-browser window. Its window is matched by executable.
+const resolved = new Map(); // command -> promise of its real path
+function binary(cmd) {
+  if (!resolved.has(cmd)) {
+    resolved.set(cmd, new Promise((resolve) => {
+      const [c, ...args] = host(['sh', '-c', 'readlink -f "$(command -v "$1")"', 'sh', cmd]);
+      execFile(c, args, (err, out) => resolve(err ? '' : out.trim()));
+    }));
+  }
+  return resolved.get(cmd);
+}
+
+// argv[0] rather than /proc/<pid>/exe: Electron apps can make the exe link unreadable.
+const exeOf = (pid) => cmdline(pid).split('\0')[0];
+
+async function findApp(p) {
+  const bin = await binary(p.command[0]);
+  const name = path.basename(p.command[0]);
+  const mine = (await hypr.json('clients')).filter((c) => {
+    const exe = exeOf(c.pid);
+    return exe && (exe === bin || path.basename(exe) === name);
+  });
+  // The biggest one is the main window, not a popup or the app's own mini widget.
+  return mine.sort((a, b) => b.size[0] * b.size[1] - a.size[0] * a.size[1])[0] || null;
+}
+
+async function showApp(p, bounds) {
+  if (!hypr.available || !p.command?.length) return;
+  let w = windows.get(p.id);
+  if (w && !(await hypr.json('clients')).some((c) => c.address === w.addr)) { windows.delete(p.id); w = null; }
+  if (!w) {
+    let c = await findApp(p);
+    if (!c) {
+      const [cmd, ...args] = host(p.command);
+      spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', (e) => console.error(e.message)).unref();
+      for (let i = 0; i < 150 && !c; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        c = await findApp(p);
+      }
+      if (!c) throw new Error(`${p.label} window didn't appear`);
+    }
+    // Remember where it lived, to hand it back when the bubble lets go of it.
+    w = { addr: c.address, pid: c.pid, shown: false, app: true, home: c.workspace.id, floating: c.floating };
+    windows.set(p.id, w);
+  }
+  await park(w, bounds);
+}
+
+// Put an app's window back on a normal workspace, unpinned, as it was.
+async function release(w) {
+  const window = `address:${w.addr}`;
+  try {
+    if (w.shown) await hypr.dispatch('window.pin', { window, action: 'disable' });
+    const ws = w.home > 0 ? w.home : (await hypr.json('activeworkspace')).id;
+    await hypr.dispatch('window.move', { window, workspace: String(ws), follow: false });
+    if (!w.floating) await hypr.dispatch('window.float', { window, action: 'disable' });
+  } catch { /* already closed */ }
 }
 
 async function hide(id, dataDir) {
@@ -185,17 +263,35 @@ async function hide(id, dataDir) {
   } catch { windows.delete(id); } // already closed by the user
 }
 
-function close(id) {
+// After a crash an app's window can be left on our hidden workspace. Bring it back.
+async function rescue(apps) {
+  if (!hypr.available) return;
+  for (const p of apps) {
+    if (!p.command?.length) continue;
+    const name = path.basename(p.command[0]);
+    for (const c of await hypr.json('clients')) {
+      if (c.workspace.name === HIDDEN && path.basename(exeOf(c.pid)) === name) {
+        await release({ addr: c.address, shown: true, home: 0, floating: false });
+      }
+    }
+  }
+}
+
+// Our browsers are closed; an app is never killed, only handed back.
+async function close(id) {
   const w = windows.get(id);
   windows.delete(id);
-  if (w?.pid) { try { process.kill(w.pid); } catch { /* already gone */ } }
+  if (w?.app) await release(w);
+  else if (w?.pid) { try { process.kill(w.pid); } catch { /* already gone */ } }
 }
 
 module.exports = {
   show,
+  showApp,
+  rescue,
   hide,
   close,
-  closeAll: () => { for (const id of [...windows.keys()]) close(id); },
+  closeAll: () => Promise.all([...windows.keys()].map(close)),
   isShown: (id) => Boolean(windows.get(id)?.shown),
   clearProfile: (dataDir, id) => {
     close(id);

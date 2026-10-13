@@ -64,6 +64,9 @@ const provider = (id = state.active) => cfg.providers.find((p) => p.id === id);
 const enabled = () => cfg.providers.filter((p) => p.enabled !== false);
 const embedded = (p) => p?.type === 'web' && p.browser !== true;  // lives in our WebContentsView
 const inBrowser = (p) => p?.type === 'web' && p.browser === true; // lives in a real browser window
+// An app's own window parked over the card. Needs Hyprland; elsewhere the tab shows an Open button.
+const parkedApp = (p) => p?.type === 'app' && p.park !== false && hypr.available;
+const external = (p) => inBrowser(p) || parkedApp(p);
 const persist = () => saveState({ pos: state.pos, locked: state.locked, active: state.active, threads: state.threads });
 const thread = (id = state.active) => (state.threads[id] ||= { sessionId: null, messages: [] });
 
@@ -138,22 +141,22 @@ function layout() {
   // A real-browser bot's card is its own window, so ours stops at the bar.
   const tabs = cfg.settings.showTabs !== false;
   const bar = tabs ? HEADER : 0;
-  const external = inBrowser(provider());
+  const outside = external(provider());
   const cardH = EXP_H - DOT - HEADER - PAD;
-  const height = DOT + bar + (external ? 0 : PAD + cardH);
+  const height = DOT + bar + (outside ? 0 : PAD + cardH);
   const x = h === 'right' ? state.pos.x + DOT - EXP_W : state.pos.x;
   const y = v === 'bottom' ? state.pos.y + DOT - height : state.pos.y;
   const dotY = v === 'bottom' ? height - DOT : 0;
   const barY = v === 'bottom' ? dotY - bar : DOT;
   const card = { x: PAD, y: v === 'bottom' ? barY - PAD - cardH : barY + bar + PAD, width: EXP_W - 2 * PAD, height: cardH };
   return {
-    compact: external,
+    compact: outside,
     tabs,
     win: { x, y, width: EXP_W, height },
     dot: { x: h === 'right' ? EXP_W - DOT : 0, y: dotY, size: DOT },
     pill: tabs ? { x: 0, y: barY, width: EXP_W, height: HEADER } : null,
-    card: external ? null : card,
-    browser: external ? { x: x + card.x, y: y + card.y, width: card.width, height: card.height } : null,
+    card: outside ? null : card,
+    browser: outside ? { x: x + card.x, y: y + card.y, width: card.width, height: card.height, right: h === 'right', bottom: v === 'bottom' } : null,
   };
 }
 
@@ -281,9 +284,9 @@ function destroyView(id) {
 function syncViews(l = layout()) {
   const p = provider();
   if (state.expanded && embedded(p) && !views.has(p.id)) createView(p);
-  for (const b of cfg.providers.filter(inBrowser)) {
+  for (const b of cfg.providers.filter(external)) {
     if (state.expanded && b.id === state.active) {
-      browser.show(b, l.browser, dataDir, bridge).then(() => {
+      (parkedApp(b) ? browser.showApp(b, l.browser) : browser.show(b, l.browser, dataDir, bridge)).then(() => {
         // The bubble may have closed while the browser was starting.
         if (!(state.expanded && state.active === b.id)) browser.hide(b.id, dataDir);
         if (state.browserError[b.id]) { delete state.browserError[b.id]; broadcast(); }
@@ -346,7 +349,7 @@ function publicState() {
     layout: layout(),
     unread: Object.values(state.unread).some(Boolean),
     unreadBy: state.unread,
-    hint: inBrowser(p) ? (state.browserError[p.id] || `${p.label} is open in its own browser window.`) : 'Loading…',
+    hint: external(p) ? (state.browserError[p.id] || `${p.label} is open in its own window.`) : 'Loading…',
     messages: p.type === 'cli' ? thread(p.id).messages : [],
     busy: state.busy?.id === p.id,
     busyAny: Boolean(state.busy),
@@ -488,9 +491,10 @@ function applyConfig(next) {
     const keep = p && p.enabled !== false && embedded(p) && p.url === v.url;
     if (!keep) destroyView(id);
   }
-  for (const old of prev.providers.filter(inBrowser)) {
+  for (const old of prev.providers.filter(external)) {
     const p = provider(old.id);
-    if (!p || p.enabled === false || !inBrowser(p) || p.url !== old.url) browser.close(old.id);
+    const same = inBrowser(old) ? inBrowser(p) && p.url === old.url : parkedApp(p) && String(p.command) === String(old.command);
+    if (!p || p.enabled === false || !same) browser.close(old.id);
   }
   if (cfg.settings.keepLoaded) {
     for (const p of enabled()) if (embedded(p) && !views.has(p.id)) createView(p);
@@ -622,6 +626,7 @@ async function findHyprWindow() {
 
 async function boot() {
   await hypr.init();
+  await browser.rescue(cfg.providers.filter((p) => p.type === 'app'));
   bridge = await startBridge(dataDir, {
     activity: (id) => { if (inBrowser(provider(id))) markUnread(id); },
     avatar: (id, a) => {
@@ -691,5 +696,14 @@ if (!app.requestSingleInstanceLock()) {
     app.quit();
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => browser.closeAll());
+  // Hand parked app windows back before quitting, so none is left on the hidden workspace.
+// A plain kill (pkill, logout) goes through the same path.
+process.on('SIGTERM', () => app.quit());
+let released = false;
+app.on('before-quit', (e) => {
+  if (released) return;
+  e.preventDefault();
+  released = true;
+  browser.closeAll().finally(() => app.quit());
+});
 }

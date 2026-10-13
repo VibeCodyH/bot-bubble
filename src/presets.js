@@ -2,7 +2,7 @@
 module.exports = [
   { group: 'Bots', label: 'Dots', type: 'web', url: 'https://chatgpt.com/dots', note: 'OpenAI · ChatGPT Pro or Business Premium' },
   { group: 'Bots', label: 'Muse', type: 'web', url: 'https://muse.ai', note: 'Meta' },
-  { group: 'Bots', label: 'Grok Bot', type: 'app', command: ['grok-bot'], avatar: ['/opt/Grok Bot/resources/icon.png'], note: 'xAI · opens the desktop app' },
+  { group: 'Bots', label: 'Grok Bot', type: 'app', command: ['grok-bot'], avatar: ['/opt/Grok Bot/resources/icon.png'], note: 'xAI · the desktop app, parked in the bubble' },
   { group: 'Chat', label: 'ChatGPT', type: 'web', url: 'https://chatgpt.com', note: 'OpenAI' },
   { group: 'Chat', label: 'Claude', type: 'web', url: 'https://claude.ai', note: 'Anthropic' },
   { group: 'Chat', label: 'Grok', type: 'web', url: 'https://grok.com', note: 'xAI' },

@@ -150,7 +150,14 @@ function renderEditor(li, p) {
   }
   if (p.type === 'app') {
     field(fields, 'Command', textInput(joinCommand(p.command), 'grok-bot', (v) => { p.command = splitCommand(v); refreshHead(); }, () => save()),
-      'Runs when you click Open in the bubble.');
+      'Starts the app if it isn\'t running.');
+    const park = document.createElement('input');
+    park.type = 'checkbox';
+    park.className = 'switch';
+    park.checked = p.park !== false;
+    park.onchange = () => { p.park = park.checked ? undefined : false; save(); };
+    field(fields, 'Show inside the bubble', park,
+      'Parks the app\'s own window over the bot bar and hides it when the bubble closes. Needs Hyprland; elsewhere the tab shows an Open button.');
   }
   if (p.type === 'cli') {
     const sel = document.createElement('select');
