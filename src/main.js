@@ -144,7 +144,7 @@ function layout() {
   const tabs = cfg.settings.showTabs !== false;
   const bar = tabs ? HEADER : 0;
   const outside = external(provider());
-  const cardH = EXP_H - DOT - HEADER - PAD;
+  const cardH = Math.min(EXP_H - DOT - HEADER - PAD, (state.anchor.room ?? Infinity) - DOT - bar - PAD);
   const height = DOT + bar + (outside ? 0 : PAD + cardH);
   const x = h === 'right' ? state.pos.x + DOT - EXP_W : state.pos.x;
   const y = v === 'bottom' ? state.pos.y + DOT - height : state.pos.y;
@@ -192,7 +192,7 @@ let layoutAgain = false;
 function applyLayout() {
   if (layoutRun) { layoutAgain = true; return layoutRun; }
   layoutRun = (async () => {
-    do { layoutAgain = false; await layoutPass(); } while (layoutAgain);
+    do { layoutAgain = false; await layoutPass().catch((e) => console.error(e)); } while (layoutAgain);
   })().finally(() => { layoutRun = null; });
   return layoutRun;
 }
@@ -203,8 +203,12 @@ async function layoutPass() {
     h: state.pos.x + DOT / 2 > m.x + m.width / 2 ? 'right' : 'left',
     v: state.pos.y + DOT / 2 > m.y + m.height / 2 ? 'bottom' : 'top',
   };
+  // The half the dot is in is the roomier side, but a dot near the middle can
+  // still lack room for the whole bubble; the card shortens to fit.
+  state.anchor.room = state.anchor.v === 'bottom' ? state.pos.y + DOT - m.y : m.y + m.height - state.pos.y;
   const l = layout();
   await place(l.win).catch((e) => console.error(e.message));
+  if (layoutAgain) return; // state changed while placing; the next pass lays out the new state
   syncViews(l);
   broadcast();
 }
@@ -269,6 +273,8 @@ function createView(p) {
   const wc = view.webContents;
   guardPopups(wc, wc.session);
   wc.on('page-title-updated', (_e, title) => { if (/^\(\d+\)/.test(title)) markUnread(p.id); });
+  // Esc closes the bubble even while the bot's page has focus.
+  wc.on('before-input-event', (_e, input) => { if (input.type === 'keyDown' && input.key === 'Escape') setExpanded(false); });
   wc.loadURL(p.url);
   win.contentView.addChildView(view);
   views.set(p.id, { view, url: p.url });
@@ -299,6 +305,7 @@ function syncViews(l = layout()) {
   }
   for (const [id, { view }] of views) {
     const show = state.expanded && id === state.active;
+    if (!show && !cfg.settings.keepLoaded) { destroyView(id); continue; }
     if (show) view.setBounds(l.card);
     if (view.getVisible() !== show) view.setVisible(show);
   }
@@ -307,6 +314,8 @@ function syncViews(l = layout()) {
 ipcMain.on('web:avatar', (e, a) => {
   for (const [id, { view }] of views) {
     if (view.webContents !== e.sender) continue;
+    // A sign-in page's round profile photo isn't the bot's face.
+    if (!sameSite(view.webContents.getURL(), provider(id)?.url)) continue;
     const before = botAvatars.get(id)?.url;
     saveBotAvatar(id, a);
     if (botAvatars.get(id)?.url !== before) { broadcast(); settingsWin?.webContents.send('settings:avatars'); }
@@ -593,19 +602,30 @@ handle('settings:support', () => shell.openExternal(SUPPORT_URL));
 let drag = null;
 listen('drag:start', async () => {
   if (state.locked || drag) return;
-  if (state.expanded) await setExpanded(false);
+  // Claimed before any await, so a drag:end that lands mid-setup still ends it.
+  const d = drag = { busy: false };
   const cursor = hypr.available ? hypr.cursor : async () => screen.getCursorScreenPoint();
-  const c0 = await cursor();
-  drag = { dx: c0.x - state.pos.x, dy: c0.y - state.pos.y, busy: false };
-  drag.timer = setInterval(async () => {
-    if (!drag || drag.busy) return;
-    drag.busy = true;
+  try {
+    if (state.expanded) await setExpanded(false);
+    const c0 = await cursor();
+    d.dx = c0.x - state.pos.x;
+    d.dy = c0.y - state.pos.y;
+  } catch (e) {
+    console.error(e.message);
+    if (drag === d) drag = null;
+    return;
+  }
+  if (drag !== d) return;
+  d.timer = setInterval(async () => {
+    if (drag !== d || d.busy) return;
+    d.busy = true;
     try {
       const c = await cursor();
-      state.pos = { x: Math.round(c.x - drag.dx), y: Math.round(c.y - drag.dy) };
+      if (drag !== d) return;
+      state.pos = { x: Math.round(c.x - d.dx), y: Math.round(c.y - d.dy) };
       await place(layout().win, { refreshPointer: false });
     } catch (e) { console.error(e.message); }
-    if (drag) drag.busy = false;
+    d.busy = false;
   }, 16);
 });
 listen('drag:end', async () => {
@@ -723,6 +743,7 @@ app.on('before-quit', (e) => {
   if (released) return;
   e.preventDefault();
   released = true;
+  state.busy?.cancel();
   browser.closeAll().finally(() => app.quit());
 });
 }

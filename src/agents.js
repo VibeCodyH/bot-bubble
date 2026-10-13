@@ -143,6 +143,9 @@ function run(agent, { text, attachments = [], sessionId, workDir }) {
   let err = '';
   child.stdout.on('data', (d) => { out += d; });
   child.stderr.on('data', (d) => { err += d; });
+  // EPIPE if the CLI exits without reading its input; the exit below reports it.
+  let stdinErr = null;
+  child.stdin.on('error', (e) => { stdinErr = e; });
   child.stdin.end(spec.stdin || '');
 
   let cancelled = false;
@@ -155,7 +158,7 @@ function run(agent, { text, attachments = [], sessionId, workDir }) {
         const r = spec.parse(out);
         if (r && r.text) return resolve(r);
       } catch (e) { return reject(e); }
-      const tail = (err || out).trim().split('\n').slice(-3).join('\n');
+      const tail = (err || out).trim().split('\n').slice(-3).join('\n') || stdinErr?.message;
       reject(new Error(`${spec.cmd} exited ${code}${tail ? `: ${tail}` : ''}`));
     });
   });
