@@ -3,9 +3,9 @@
 // JavaScript, no imports: main.js concatenates it with the matching glue file.
 //
 // It reports two things, with no site-specific selectors:
-//   report('activity')        visible text grew by a real amount and settled
-//                             (a reply streamed in). Main ignores it while the
-//                             user is looking at that bot.
+//   report('activity')        visible text grew past anything the page has shown,
+//                             settled, and stayed (a reply streamed in). Main
+//                             ignores it while the user is looking at that bot.
 //   report('avatar', media)   the bot's own avatar, sent as bytes; re-sent only
 //                             when it changes. Either a round <video>/<img>, or a
 //                             sprite: an avatar-sized element painted from a sprite
@@ -17,10 +17,14 @@ function botBubbleWatch(report) {
   const GROWTH = 40;     // chars of new text that count as a reply, not a timestamp tick
   const SETTLE = 1500;   // ms of quiet before measuring
   const WARMUP = 10000;  // ms after load before watching, so the page's own first render doesn't count
+  const CONFIRM = 4000;  // a reply is still there this much later; banners and toasts usually aren't
+  const RESET = 60000;   // text that stays shorter this long is a different thread
   const MAX_AVATAR = 4 * 1024 * 1024;
 
-  let baseline = null;
+  let baseline = null; // text length at the last report (or first look); shorter text doesn't move it
+  let lowSince = 0;
   let timer = null;
+  let confirmTimer = null;
   let warm = false;
   let avatarSrc = '';
 
@@ -29,8 +33,22 @@ function botBubbleWatch(report) {
   function measure() {
     timer = null;
     const len = textLength();
-    if (baseline === null || len < baseline) baseline = len; // first look, or thread switched
-    else if (len - baseline >= GROWTH) { baseline = len; report('activity'); }
+    if (baseline === null) { baseline = len; return; }
+    const grown = len - baseline >= GROWTH;
+    // Growth has to hold for the whole CONFIRM window: a rotating banner or a toast drops back first.
+    if (!grown) { clearTimeout(confirmTimer); confirmTimer = null; }
+    if (len < baseline) {
+      lowSince ||= Date.now();
+      if (Date.now() - lowSince >= RESET) { baseline = len; lowSince = 0; }
+      return;
+    }
+    lowSince = 0;
+    if (!grown || confirmTimer) return;
+    confirmTimer = setTimeout(() => {
+      confirmTimer = null;
+      const now = textLength();
+      if (now - baseline >= GROWTH) { baseline = now; report('activity'); }
+    }, CONFIRM);
   }
 
   function circular(el) {
