@@ -33,7 +33,8 @@ function botBubbleWatch(report) {
   function measure() {
     timer = null;
     const len = textLength();
-    if (baseline === null) { baseline = len; return; }
+    // A page that was still blank when warm-up ended is rendering for the first time, not replying.
+    if (baseline === null || baseline < GROWTH) { baseline = len; return; }
     const grown = len - baseline >= GROWTH;
     // Growth has to hold for the whole CONFIRM window: a rotating banner or a toast drops back first.
     if (!grown) { clearTimeout(confirmTimer); confirmTimer = null; }
