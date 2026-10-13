@@ -204,8 +204,11 @@ $('dot').addEventListener('pointerup', () => {
   press = null;
 });
 // The button-up can go missing (capture lost, pointer cancelled); a drag must still end.
+// A plain click is left alone: capture can drop before its button-up (focus moving
+// from a bot's page to the dot), and clearing it there would swallow the click.
 const endPress = () => {
-  if (press?.dragging) api.dragEnd();
+  if (!press?.dragging) return;
+  api.dragEnd();
   press = null;
 };
 $('dot').addEventListener('pointercancel', endPress);
