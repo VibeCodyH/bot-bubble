@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Start the dot. Running it again while it's up toggles the bubble.
+dir="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+exec "$dir/node_modules/.bin/electron" "$dir" "$@"

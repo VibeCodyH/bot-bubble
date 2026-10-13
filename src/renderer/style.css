@@ -1,0 +1,153 @@
+:root {
+  --glass: rgba(20, 22, 28, 0.9);
+  --edge: rgba(255, 255, 255, 0.12);
+  --hi: rgba(255, 255, 255, 0.06);
+  --text: #f2f3f5;
+  --muted: rgba(242, 243, 245, 0.55);
+  --accent: #ff7a1a;
+  --dot: 56px;
+}
+
+[hidden] { display: none !important; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; }
+body { font: 13px/1.4 system-ui, sans-serif; color: var(--text); user-select: none; }
+svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- dot ---------- */
+#dot {
+  position: absolute;
+  width: var(--dot); height: var(--dot);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 25%, #3a3f4b, #16181d 70%);
+  /* Must fit the 8px between the dot and its window's edge, or the edge cuts it off square. */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--edge);
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+#dot:hover { transform: scale(1.05); }
+#dot:active { transform: scale(0.97); }
+.av { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; object-fit: cover; pointer-events: none; clip-path: circle(50%); }
+#glyph { width: 28px; height: 28px; color: #cfd3dc; pointer-events: none; }
+#badge {
+  position: absolute; top: 1px; right: 1px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #fff;
+  animation: pop 400ms ease-out;
+}
+#locked {
+  position: absolute; bottom: -2px; left: -2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #24272f; box-shadow: inset 0 0 0 1px var(--edge);
+}
+#locked svg { width: 11px; height: 11px; }
+@keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+/* ---------- card + bot bar ---------- */
+#card, #pill {
+  position: absolute;
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 var(--hi);
+  animation: open 140ms ease-out;
+}
+@keyframes open { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+#card { border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; }
+#pill { border-radius: 999px; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px; }
+
+#tabs { flex: 1; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+#tabs button {
+  position: relative;
+  flex: none; white-space: nowrap;
+  padding: 5px 10px; border-radius: 999px;
+  color: var(--muted); font-weight: 500;
+}
+#tabs button.on { color: var(--text); background: rgba(255, 255, 255, 0.10); box-shadow: inset 0 0 0 1px var(--edge); }
+#tabs button.unread::after {
+  content: ''; position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+button {
+  border: 0; background: transparent; color: var(--muted);
+  font: inherit; cursor: pointer;
+  border-radius: 10px; height: 30px; min-width: 30px;
+  display: grid; place-items: center;
+  transition: background 150ms, color 150ms;
+}
+#pill > button { border-radius: 50%; }
+button:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+button.label { display: flex; gap: 5px; padding: 0 10px 0 8px; white-space: nowrap; }
+button.label svg { width: 14px; height: 14px; }
+
+#content { flex: 1; min-height: 0; display: grid; }
+#content > * { grid-area: 1 / 1; }
+.hint { color: var(--muted); place-self: center; }
+body:not(.t-web) #web-hint, body:not(.t-app) #app-card, body:not(.t-cli) #chat { display: none; }
+
+.app { place-self: center; display: grid; justify-items: center; gap: 14px; padding: 24px; text-align: center; color: var(--muted); }
+.app img { width: 72px; height: 72px; border-radius: 50%; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+.app b { color: var(--text); }
+button.primary { display: flex; gap: 0.3em; height: 36px; padding: 0 18px; white-space: nowrap; border-radius: 999px; background: #f2f3f5; color: #111; font-weight: 600; }
+button.primary:hover { background: #fff; color: #000; }
+
+/* ---------- cli chat ---------- */
+#chat { display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; }
+#chat-head { display: flex; align-items: center; justify-content: space-between; height: 44px; flex: none; padding: 0 0 0 6px; }
+#chat-head b { font-weight: 600; }
+#messages { flex: 1; overflow-y: auto; list-style: none; padding: 4px 4px 12px; display: flex; flex-direction: column; gap: 10px; user-select: text; }
+#messages li { max-width: 88%; line-height: 1.5; overflow-wrap: anywhere; }
+#messages li.user { align-self: flex-end; padding: 8px 12px; border-radius: 16px; background: rgba(255, 255, 255, 0.09); }
+#messages li.assistant { align-self: flex-start; }
+#messages li.system { align-self: center; color: var(--muted); font-size: 12px; text-align: center; white-space: pre-wrap; }
+#messages li.assistant p + p, #messages li.assistant ul, #messages li.assistant pre { margin-top: 8px; }
+#messages ul { padding-left: 18px; }
+#messages code { font: 12px ui-monospace, monospace; background: rgba(255, 255, 255, 0.08); padding: 1px 4px; border-radius: 4px; }
+#messages pre { background: rgba(0, 0, 0, 0.35); border-radius: 10px; padding: 10px; overflow-x: auto; }
+#messages pre code { background: none; padding: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.10); color: var(--muted); }
+.chip img { width: 18px; height: 18px; border-radius: 4px; object-fit: cover; }
+.chip button { height: 16px; min-width: 16px; border-radius: 50%; font-size: 11px; }
+.typing span { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+.typing a { margin-left: 8px; font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+#pending { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px 6px; }
+#pending:empty { display: none; }
+#composer {
+  display: flex; align-items: flex-end; gap: 4px;
+  padding: 5px; border-radius: 22px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.10);
+}
+#composer button { border-radius: 50%; height: 32px; min-width: 32px; }
+#composer textarea {
+  flex: 1; resize: none; border: 0; outline: 0; background: transparent;
+  color: var(--text); font: inherit; font-size: 14px; line-height: 20px;
+  padding: 6px 4px; max-height: 108px;
+}
+#composer textarea::placeholder { color: var(--muted); }
+#send { background: #f2f3f5; color: #111; }
+#send:hover { background: #fff; color: #000; }
+#send:disabled { opacity: 0.35; cursor: default; }
+
+/* Tail: a small rotated square on the edge facing the dot (on the bar, or on
+   the card when the bar is hidden). */
+.tail {
+  position: absolute; width: 14px; height: 14px;
+  background: var(--glass); border: 1px solid var(--edge);
+  transform: rotate(45deg);
+}
+body.tabs #card .tail { display: none; }
+body.v-bottom .tail { bottom: -8px; border-top: 0; border-left: 0; }
+body.v-top .tail { top: -8px; border-bottom: 0; border-right: 0; }
+body.h-right .tail { right: 28px; }
+body.h-left .tail { left: 28px; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }

@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: https:; media-src 'self' file:; style-src 'self'">
+  <title>Bot Bubble Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div id="titlebar">
+    <span class="brand"><i class="logo"></i>Bot Bubble</span>
+    <span id="saved" class="saved">Saved</span>
+    <button id="close" class="icon" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+
+  <div id="shell">
+    <nav id="sidebar">
+      <button data-page="bots" class="on"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="5"/><circle cx="9.5" cy="13" r="1.2"/><circle cx="14.5" cy="13" r="1.2"/><path d="M12 7V4"/></svg>Bots</button>
+      <button data-page="general"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>General</button>
+      <button data-page="about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>About</button>
+      <div class="grow"></div>
+      <button id="quit" class="quiet"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/></svg>Quit Bot Bubble</button>
+    </nav>
+
+    <main>
+      <section id="page-bots" class="page">
+        <div class="page-head">
+          <div>
+            <h1>Bots</h1>
+            <p class="sub">Your bubble's tabs, in order. Each web bot keeps its own sign-in.</p>
+          </div>
+          <button id="add" class="primary"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add a bot</button>
+        </div>
+        <ul id="bots" class="list"></ul>
+      </section>
+
+      <section id="page-general" class="page" hidden>
+        <div class="page-head"><div><h1>General</h1><p class="sub">How the dot behaves on your desktop.</p></div></div>
+        <div class="group">
+          <div class="row">
+            <span><b>Default bot</b><small>The bubble opens on this bot every time you click the dot.</small></span>
+            <select id="default-bot" class="select"></select>
+          </div>
+          <label class="row">
+            <span><b>Show bot bar</b><small>Off: the dot opens your default bot by itself. Right-click the dot to switch bots or reach Settings.</small></span>
+            <input type="checkbox" id="show-tabs" class="switch">
+          </label>
+        </div>
+        <div class="group">
+          <label class="row">
+            <span><b>Launch at login</b><small>Start Bot Bubble when you sign in to your desktop.</small></span>
+            <input type="checkbox" id="autostart" class="switch">
+          </label>
+          <label class="row">
+            <span><b>Keep web bots loaded</b><small>Lets a reply light the badge while the bubble is closed. Uses more memory.</small></span>
+            <input type="checkbox" id="keep-loaded" class="switch">
+          </label>
+          <label class="row">
+            <span><b>Lock dot position</b><small>Stop the dot from being dragged. Also in the dot's right-click menu.</small></span>
+            <input type="checkbox" id="locked" class="switch">
+          </label>
+          <div class="row">
+            <span><b>Dot position</b><small>Send the dot back to the corner of the screen your cursor is on.</small></span>
+            <button id="reset-pos" class="secondary">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-about" class="page" hidden>
+        <div class="page-head"><div><h1>About</h1><p class="sub">A floating dot for your AI bots.</p></div></div>
+        <div class="group">
+          <div class="row"><span><b>Version</b></span><span id="version" class="mono muted"></span></div>
+          <div class="row">
+            <span><b>Config file</b><small id="config-path" class="mono"></small></span>
+            <button class="secondary" data-open="config">Open</button>
+          </div>
+          <div class="row">
+            <span><b>Data folder</b><small id="data-path" class="mono"></small></span>
+            <button class="secondary" data-open="data">Open</button>
+          </div>
+        </div>
+        <div class="group">
+          <div class="row">
+            <span><b>Support Bot Bubble</b><small>Free and open source under GPL-3.0. If it's useful to you, a tip helps cover the costs.</small></span>
+            <button id="support" class="secondary">Support</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="sheet" hidden>
+    <div class="sheet-card">
+      <div class="page-head">
+        <div><h1 id="sheet-title">Add a bot</h1><p class="sub" id="sheet-sub">Pick one to add it as a tab.</p></div>
+        <button id="sheet-close" class="icon"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div id="presets"></div>
+    </div>
+  </div>
+
+  <template id="bot-row">
+    <li class="bot">
+      <div class="bot-main">
+        <div class="order">
+          <button class="icon up" title="Move up"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+          <button class="icon down" title="Move down"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+        <span class="avatar"></span>
+        <span class="meta"><b class="name"></b><small class="detail mono"></small></span>
+        <span class="chip type"></span>
+        <input type="checkbox" class="switch enabled" title="Show in the bubble">
+        <button class="icon expand" title="Edit"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="editor" hidden>
+        <div class="fields"></div>
+        <div class="actions"></div>
+      </div>
+    </li>
+  </template>
+
+  <script src="avatar.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
