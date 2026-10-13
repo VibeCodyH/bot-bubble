@@ -1,7 +1,7 @@
 {
   "name": "bot-bubble",
   "productName": "Bot Bubble",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A floating dot for your AI bots: Dots, Muse, Grok Bot and agent CLIs, one click away.",
   "main": "src/main.js",
   "desktopName": "bot-bubble.desktop",
