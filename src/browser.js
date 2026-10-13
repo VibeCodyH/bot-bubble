@@ -6,6 +6,7 @@ const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const hypr = require('./hyprland');
+const winpark = process.platform === 'win32' ? require('./winpark') : null;
 
 // Brave and Chromium still load our extension from the command line (avatar +
 // unread badge). Branded Chrome refuses, so it's the fallback: sign-in works, no extras.
@@ -107,7 +108,11 @@ function watch() {
 
 async function show(p, bounds, dataDir, bridge) {
   let w = windows.get(p.id);
-  if (w && !hypr.available) return; // elsewhere we can only launch it, not park it
+  if (w && !hypr.available) {
+    // Windows can be parked too; elsewhere we can only launch it.
+    if (winpark) { winpark.show(dataDir, w.pid, bounds); w.shown = true; }
+    return;
+  }
   if (w && !(await hypr.json('clients')).some((c) => c.address === w.addr)) w = null; // user closed it
   if (!w) {
     const browser = await findBrowser();
@@ -122,6 +127,7 @@ async function show(p, bounds, dataDir, bridge) {
       if (out.trim() !== 'ok') console.error(`hyprland rule: ${out.trim()}`);
     }
     fs.mkdirSync(dir, { recursive: true });
+    if (winpark) await winpark.closeProfile(dir);
     const extras = EXTENSIONS_OK.has(browser.name) && bridge ? [
       `--load-extension=${writeExtension(dataDir, p, bridge)}`,
       '--disable-features=DisableLoadExtensionCommandLineSwitch',
@@ -138,6 +144,7 @@ async function show(p, bounds, dataDir, bridge) {
       const entry = { addr: null, pid: child.pid, shown: true };
       windows.set(p.id, entry);
       child.on('exit', () => { if (windows.get(p.id) === entry) windows.delete(p.id); });
+      if (winpark) winpark.show(dataDir, child.pid, bounds);
       return;
     }
     let c = null;
@@ -163,9 +170,13 @@ async function show(p, bounds, dataDir, bridge) {
   watch();
 }
 
-async function hide(id) {
+async function hide(id, dataDir) {
   const w = windows.get(id);
-  if (!w || !w.shown || !hypr.available) return;
+  if (!w || !w.shown) return;
+  if (!hypr.available) {
+    if (winpark) { w.shown = false; winpark.hide(dataDir, w.pid); }
+    return;
+  }
   w.shown = false; // first, so a show() racing this one re-shows it instead of trusting stale state
   const window = `address:${w.addr}`;
   try {

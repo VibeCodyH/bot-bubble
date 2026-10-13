@@ -90,13 +90,13 @@ Developed on Fedora 44 with Hyprland 0.56 (Lua config). Reports and fixes for ot
 |----------|-------|
 | Hyprland 0.55+ | Full support, including real-browser window parking. |
 | macOS 26 (Apple silicon) | Checked: the dot stays on top, the bubble opens, dragging and web bots work. |
-| Windows 10 | Checked: the dot stays on top, the bubble opens, dragging and web bots work. |
+| Windows 10 | Checked: the dot stays on top, the bubble opens, dragging and web bots work, and real-browser windows park over the bubble. |
 | Older Hyprland, X11 | The dot uses Electron's own always-on-top and positioning. Untested. |
 | GNOME, KDE and other Wayland compositors | The dot shows, but the compositor decides where. Position isn't restored. Untested. |
 
 macOS and Windows builds aren't signed yet, so Gatekeeper and SmartScreen will warn on first launch. Build them with `npm run dist:mac` on a Mac or `npm run dist:win` on Windows.
 
-Real-browser mode looks for Brave, Chromium or Chrome on your `PATH` on Linux, and in the standard install folders on macOS and Windows (untested on macOS). Parking that window over the bubble, pinning it, and hiding it when the bubble closes only works on Hyprland. Elsewhere it opens in its own browser window over the bubble, but Bot Bubble can't pin that window or hide it when the bubble closes.
+Real-browser mode looks for Brave, Chromium or Chrome on your `PATH` on Linux, and in the standard install folders on macOS and Windows (untested on macOS). On Hyprland and Windows, Bot Bubble parks that window over the bubble, keeps it on top, and hides it when the bubble closes. Elsewhere it opens in its own browser window over the bubble, but Bot Bubble can't pin it or hide it.
 
 ## Status
 

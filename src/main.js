@@ -285,11 +285,11 @@ function syncViews(l = layout()) {
     if (state.expanded && b.id === state.active) {
       browser.show(b, l.browser, dataDir, bridge).then(() => {
         // The bubble may have closed while the browser was starting.
-        if (!(state.expanded && state.active === b.id)) browser.hide(b.id);
+        if (!(state.expanded && state.active === b.id)) browser.hide(b.id, dataDir);
         if (state.browserError[b.id]) { delete state.browserError[b.id]; broadcast(); }
       }).catch((e) => { state.browserError[b.id] = e.message; broadcast(); });
     } else {
-      browser.hide(b.id);
+      browser.hide(b.id, dataDir);
     }
   }
   for (const [id, { view }] of views) {
