@@ -54,7 +54,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   animation: open 140ms ease-out;
 }
 @keyframes open { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-#card { border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; }
+#card { border-radius: 18px; display: flex; flex-direction: column; }
 #pill { border-radius: 999px; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px; }
 
 #tabs { flex: 1; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
@@ -83,7 +83,8 @@ button:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 button.label { display: flex; gap: 5px; padding: 0 10px 0 8px; white-space: nowrap; }
 button.label svg { width: 14px; height: 14px; }
 
-#content { flex: 1; min-height: 0; display: grid; }
+/* Clips to the card's corners here, not on #card, so the card's tail can stick out. */
+#content { flex: 1; min-height: 0; display: grid; overflow: hidden; border-radius: inherit; }
 #content > * { grid-area: 1 / 1; }
 .hint { color: var(--muted); place-self: center; }
 body:not(.t-web) #web-hint, body:not(.t-app) #app-card, body:not(.t-cli) #chat { display: none; }
@@ -137,15 +138,17 @@ button.primary:hover { background: #fff; color: #000; }
 #send:disabled { opacity: 0.35; cursor: default; }
 
 /* Tail: a small rotated square on the edge facing the dot (on the bar, or on
-   the card when the bar is hidden). */
+   the card when the bar is hidden). Clipped to the half outside the edge: the
+   glass is translucent, so an unclipped inner half stacks on the bar and shows
+   as a diamond over light backgrounds. */
 .tail {
   position: absolute; width: 14px; height: 14px;
   background: var(--glass); border: 1px solid var(--edge);
   transform: rotate(45deg);
 }
 body.tabs #card .tail { display: none; }
-body.v-bottom .tail { bottom: -8px; border-top: 0; border-left: 0; }
-body.v-top .tail { top: -8px; border-bottom: 0; border-right: 0; }
+body.v-bottom .tail { bottom: -8px; border-top: 0; border-left: 0; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+body.v-top .tail { top: -8px; border-bottom: 0; border-right: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
 body.h-right .tail { right: 28px; }
 body.h-left .tail { left: 28px; }
 
