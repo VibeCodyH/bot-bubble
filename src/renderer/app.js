@@ -203,6 +203,13 @@ $('dot').addEventListener('pointerup', () => {
   else api.toggle();
   press = null;
 });
+// The button-up can go missing (capture lost, pointer cancelled); a drag must still end.
+const endPress = () => {
+  if (press?.dragging) api.dragEnd();
+  press = null;
+};
+$('dot').addEventListener('pointercancel', endPress);
+$('dot').addEventListener('lostpointercapture', endPress);
 $('dot').addEventListener('contextmenu', (e) => {
   e.preventDefault();
   api.menu();
