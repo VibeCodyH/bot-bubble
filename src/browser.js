@@ -122,7 +122,7 @@ async function show(p, bounds, dataDir, bridge) {
       // Float it from the first frame so it never flashes in as a tiled window.
       const cls = `^[a-z-]+-${escape(new URL(p.url).host)}_.*$`;
       // JSON.stringify doubles the regex backslashes, which is what a Lua string needs.
-      const out = await hypr.eval(`hl.window_rule({ name = ${JSON.stringify(`bot-bubble-browser-${p.id}`)}, match = { class = ${JSON.stringify(cls)} }, float = true, `
+      const out = await hypr.eval(`hl.window_rule({ name = ${JSON.stringify(`bot-bubble-browser-${p.id}`)}, match = { class = ${JSON.stringify(cls)} }, float = true, tag = "+bot-bubble", `
         + `border_size = 0, rounding = 14, no_shadow = true, size = "${bounds.width} ${bounds.height}", move = "${bounds.x} ${bounds.y}" })`);
       if (out.trim() !== 'ok') console.error(`hyprland rule: ${out.trim()}`);
     }
@@ -166,6 +166,8 @@ async function park(w, bounds) {
     const ws = await hypr.json('activeworkspace');
     await hypr.dispatch('window.move', { window, workspace: String(ws.id), follow: false });
     await hypr.dispatch('window.float', { window, action: 'enable' });
+    // Taskbars can skip tagged windows. Tag before pinning: the pin event is what makes them refresh.
+    await hypr.dispatch('window.tag', { window, tag: '+bot-bubble' });
     await hypr.dispatch('window.pin', { window, action: 'enable' });
     w.shown = true;
   }
@@ -241,7 +243,8 @@ async function showApp(p, bounds) {
 async function release(w) {
   const window = `address:${w.addr}`;
   try {
-    if (w.shown) await hypr.dispatch('window.pin', { window, action: 'disable' });
+    await hypr.dispatch('window.tag', { window, tag: '-bot-bubble' });
+    await hypr.dispatch('window.pin', { window, action: 'disable' });
     const ws = w.home > 0 ? w.home : (await hypr.json('activeworkspace')).id;
     await hypr.dispatch('window.move', { window, workspace: String(ws), follow: false });
     if (!w.floating) await hypr.dispatch('window.float', { window, action: 'disable' });

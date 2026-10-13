@@ -25,6 +25,8 @@ public static class Park {
   [DllImport("user32.dll")] static extern int GetSystemMetricsForDpi(int i, uint dpi);
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint f);
   [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+  [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
   [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
   [DllImport("gdi32.dll")] static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
@@ -72,6 +74,12 @@ public static class Park {
     // SM_CYSIZEFRAME + SM_CXPADDEDBORDER + SM_CYCAPTION: the title bar Chrome draws.
     int top = GetSystemMetricsForDpi(33, dpi) + GetSystemMetricsForDpi(92, dpi) + GetSystemMetricsForDpi(4, dpi);
     int round = (int)(36 * dpi / 96);
+    // A tool window gets no taskbar button. The taskbar only notices while it's hidden.
+    long ex = GetWindowLongPtr(hwnd, -20 /* GWL_EXSTYLE */).ToInt64();
+    if ((ex & 0x80 /* WS_EX_TOOLWINDOW */) == 0) {
+      ShowWindow(hwnd, 0 /* SW_HIDE */);
+      SetWindowLongPtr(hwnd, -20, new IntPtr((ex | 0x80) & ~0x40000L /* WS_EX_APPWINDOW */));
+    }
     ShowWindow(hwnd, 4 /* SW_SHOWNOACTIVATE */);
     SetWindowPos(hwnd, new IntPtr(-1) /* HWND_TOPMOST */, x - left, y - top, w + left + right, h + top + bottom, 0x0010 /* SWP_NOACTIVATE */);
     SetWindowRgn(hwnd, CreateRoundRectRgn(left, top, left + w + 1, top + h + 1, round, round), true);

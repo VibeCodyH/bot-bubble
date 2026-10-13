@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, WebContentsView, ipcMain, screen, session, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, Tray, WebContentsView, ipcMain, nativeImage, screen, session, shell, dialog } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -615,6 +615,21 @@ listen('drag:end', async () => {
 
 // ---------- boot ----------
 
+// A tray icon, since the dot keeps itself out of the taskbar.
+let tray = null;
+function makeTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png')).resize({ width: 32, height: 32 });
+  tray = new Tray(icon);
+  tray.setToolTip('Bot Bubble');
+  tray.on('click', () => setExpanded(!state.expanded, true));
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Bot Bubble', click: () => setExpanded(true, true) },
+    { label: 'Settings…', click: () => openSettings() },
+    { type: 'separator' },
+    { label: 'Quit Bot Bubble', click: () => app.quit() },
+  ]));
+}
+
 async function findHyprWindow() {
   for (let i = 0; i < 50; i++) {
     const c = await hypr.findWindow(process.pid, TITLE);
@@ -641,7 +656,7 @@ async function boot() {
   if (!center || !(await monitors()).some((b) => inside(center, b))) state.pos = await defaultPos();
   if (hypr.available) {
     // Runtime rule, nothing written to the user's config. Gone after a Hyprland reload.
-    const rule = `hl.window_rule({ name = "bot-bubble", match = { title = "^${TITLE}$" }, float = true, pin = true, `
+    const rule = `hl.window_rule({ name = "bot-bubble", match = { title = "^${TITLE}$" }, float = true, pin = true, tag = "+bot-bubble", `
       + `border_size = 0, rounding = 0, no_shadow = true, no_anim = true, no_blur = true, no_initial_focus = true, `
       + `size = "${DOT} ${DOT}", move = "${state.pos.x} ${state.pos.y}" })`;
     const settingsRule = `hl.window_rule({ name = "bot-bubble-settings", match = { title = "^${SETTINGS_TITLE}$" }, `
@@ -680,6 +695,7 @@ async function boot() {
   if (cfg.settings.keepLoaded) for (const p of enabled()) if (embedded(p)) createView(p);
   await applyLayout();
   if (process.argv.includes('--settings')) openSettings();
+  makeTray();
 }
 
 if (!app.requestSingleInstanceLock()) {

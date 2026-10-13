@@ -10,7 +10,7 @@ const winSigned = Boolean(env.AZURE_SIGN_ENDPOINT);
 module.exports = {
   appId: 'io.github.vibecodyh.botbubble',
   productName: 'Bot Bubble',
-  files: ['src/**/*', 'package.json', 'LICENSE'],
+  files: ['src/**/*', 'build/icon.png', 'package.json', 'LICENSE'],
   electronFuses: {
     runAsNode: false,
     enableNodeOptionsEnvironmentVariable: false,
