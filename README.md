@@ -22,7 +22,7 @@ It works with the bot products themselves, not their APIs, so it runs on the sub
 
 ## Install
 
-**Prebuilt AppImage (Linux x86_64):** [buy it here](https://vibecodyh.lemonsqueezy.com/checkout/buy/f97e0430-9ffa-461f-84d1-cf0a3ec2e1b8) for $2.99, or pay what you want from $1.99. It's the same code as this repo, with no license key or DRM. Buying the build is a way to support the project if you'd rather not build it yourself.
+**Prebuilt AppImage (Linux x86_64):** coming soon for $2.99, or pay what you want from $1.99. It's the same code as this repo, with no license key or DRM. Buying the build is a way to support the project if you'd rather not build it yourself.
 
 ```bash
 chmod +x Bot-Bubble-*.AppImage
@@ -111,7 +111,6 @@ Bot Bubble is free software. If it's useful to you:
 
 - [Sponsor on GitHub](https://github.com/sponsors/VibeCodyH)
 - [Leave a tip on Ko-fi](https://ko-fi.com/vibecody)
-- [Buy the prebuilt AppImage](https://vibecodyh.lemonsqueezy.com/checkout/buy/f97e0430-9ffa-461f-84d1-cf0a3ec2e1b8)
 
 ## License
 
