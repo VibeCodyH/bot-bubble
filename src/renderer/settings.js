@@ -188,7 +188,7 @@ function renderEditor(li, p) {
     }
     pick.append(seg);
     if (mode === 'bot' && drawn) {
-      hint = `An animated ${p.label}: looks toward your cursor, and spins, squints and orbits when it's still.`;
+      hint = `Your ${p.label} agent's own shape and color. Follows your cursor while it's over the dot, and moves around while the agent works.`;
     } else if (mode === 'bot') {
       hint = data.botAvatars[p.id]
         ? `Mirrors the avatar from ${p.label}, animation included. Change it in ${p.label} and the dot follows.`
