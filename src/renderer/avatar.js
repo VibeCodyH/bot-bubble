@@ -47,6 +47,221 @@ function pet(el, url, m) {
   idle();
 }
 
+// Grok Bot: its app draws the mark in code and has no page to mirror, so this is
+// our own take on it, in the shape and color of the agent you last opened there
+// (main.js reads those). Like the app, he sits still unless the cursor is over
+// him, and while the agent is working he keeps doing one of the app's
+// moves: a glance around, a spin, a squinting scan, or shrinking to a small dot
+// with dots orbiting him or rings pinging out.
+const GROK = { x: 7, y: 6, moveMin: 1200, moveMax: 3500 };
+let grokIds = 0;
+
+// Body colors, as Grok Bot paints them on a dark background. The lighting
+// filter below does the shading.
+const GROK_COLORS = {
+  black: '#FFFFFF', brown: '#855C36', red: '#E02135', orange: '#FF6700', yellow: '#FF9800', green: '#009957',
+  cyan: '#00A592', blue: '#0E74E0', violet: '#804EE0', magenta: '#E02A88', gray: '#777777',
+};
+
+// Body shapes in a 100x100 box, centered near (50, 52). A stroke-width on a
+// shape rounds its corners (the stroke is painted in the body color).
+const poly = (pts) => `<polygon points="${pts.map((q) => q.join(',')).join(' ')}" stroke-width="10" stroke-linejoin="round"/>`;
+const ring = (n, r1, r2, turn = -90) => Array.from({ length: n * (r2 ? 2 : 1) }, (_, i) => {
+  const a = (turn + i * 360 / (n * (r2 ? 2 : 1))) * Math.PI / 180;
+  const r = r2 && i % 2 ? r2 : r1;
+  return [+(50 + r * Math.cos(a)).toFixed(1), +(52 + r * Math.sin(a)).toFixed(1)];
+});
+const tilt = (deg, shape) => `<g transform="rotate(${deg} 50 52)">${shape}</g>`;
+const bumps = (n, dist, r, core) => `${ring(n, dist).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}<circle cx="50" cy="52" r="${core}"/>`;
+// The first thirteen are the ones Grok Bot's picker offers today, drawn to match
+// it: chubby, and most of them turned a little. The rest are older shapes that
+// existing agents may still have.
+const GROK_SHAPES = {
+  blob: '<circle cx="50" cy="52" r="40"/>',
+  cloud: '<circle cx="34" cy="46" r="19"/><circle cx="58" cy="37" r="19"/><circle cx="73" cy="58" r="17"/><circle cx="53" cy="71" r="17"/><circle cx="29" cy="65" r="16"/><circle cx="50" cy="54" r="23"/>',
+  square: tilt(18, '<rect x="20" y="22" width="60" height="60" rx="17"/>'),
+  sparkle: tilt(8, '<path d="M50 22Q55 47 78 52Q55 57 50 82Q45 57 22 52Q45 47 50 22Z" stroke-width="26" stroke-linejoin="round"/>'),
+  clover: tilt(15, bumps(4, 17, 19, 22)),
+  heart: tilt(-40, '<path d="M50 80C26 64 20 48 26 37C32 26 45 28 50 37C55 28 68 26 74 37C80 48 74 64 50 80Z" stroke-width="14" stroke-linejoin="round"/>'),
+  flower: bumps(7, 25, 13, 27),
+  teardrop: tilt(-35, '<path d="M50 14C62 32 79 46 79 62A29 29 0 0 1 21 62C21 46 38 32 50 14Z"/>'),
+  tablet: tilt(-10, '<rect x="13" y="25" width="74" height="56" rx="26"/>'),
+  wedge: '<polygon points="26,24 82,62 28,84" stroke-width="18" stroke-linejoin="round"/>',
+  house: tilt(-15, poly([[50, 20], [80, 44], [80, 80], [20, 80], [20, 44]]).replace('stroke-width="10"', 'stroke-width="14"')),
+  star: tilt(10, `<polygon points="${ring(6, 40, 23).map((q) => q.join(',')).join(' ')}" stroke-width="10" stroke-linejoin="round"/>`),
+  pebble: poly([[30, 26], [66, 22], [83, 48], [71, 78], [36, 82], [18, 55]]).replace('stroke-width="10"', 'stroke-width="16"'),
+  bean: '<path d="M34 20C58 12 84 28 82 54C80 78 58 90 38 84C20 78 14 60 26 52C34 47 36 40 28 32C24 26 28 21 34 20Z"/>',
+  egg: '<path d="M50 14C70 14 82 46 82 62C82 80 68 90 50 90C32 90 18 80 18 62C18 46 30 14 50 14Z"/>',
+  squircle: '<rect x="16" y="18" width="68" height="68" rx="26"/>',
+  capsule: '<rect x="27" y="12" width="46" height="80" rx="23"/>',
+  cylinder: '<path d="M22 28A28 10 0 0 1 78 28V78A28 10 0 0 1 22 78Z"/>',
+  hex: poly(ring(6, 34)),
+  gem: poly([[27, 33], [40, 21], [60, 21], [73, 33], [50, 83]]),
+  crystal: poly([[50, 13], [69, 33], [69, 71], [50, 91], [31, 71], [31, 33]]),
+  shield: '<path d="M50 15L79 25C79 56 70 76 50 88C30 76 21 56 21 25Z" stroke-width="8" stroke-linejoin="round"/>',
+  dome: '<path d="M17 80V56A33 33 0 0 1 83 56V80Z" stroke-width="8" stroke-linejoin="round"/>',
+  arch: '<path d="M17 84V50A33 33 0 0 1 83 50V84H63V56A13 13 0 0 0 37 56V84Z" stroke-width="8" stroke-linejoin="round"/>',
+  leaf: '<path d="M50 10C78 30 82 64 50 92C18 64 22 30 50 10Z" transform="rotate(28 50 51)"/>',
+};
+// The arch's eyes sit above its opening.
+const GROK_EYE_LIFT = { arch: 8, horseshoe: 8 };
+// Older or internal names the app also uses.
+Object.assign(GROK_SHAPES, {
+  sphere: GROK_SHAPES.blob, heartChubby: GROK_SHAPES.heart, starFlower: GROK_SHAPES.flower,
+  star6: GROK_SHAPES.star, horseshoe: GROK_SHAPES.arch, hexagon: GROK_SHAPES.hex, spark: GROK_SHAPES.sparkle,
+});
+
+function grok(el, look) {
+  const id = `grok-${++grokIds}`;
+  const shape = GROK_SHAPES[look.shape] || GROK_SHAPES.blob;
+  const color = GROK_COLORS[look.color] || GROK_COLORS.black;
+  const lift = GROK_EYE_LIFT[look.shape] || 0;
+  const eye = (cx, cy, k) => `<g transform="rotate(-25 ${cx} ${cy})"><rect class="lid" x="${cx - 3.6 * k}" y="${cy - 8 * k}" width="${7.2 * k}" height="${16 * k}" rx="${3.6 * k}"/></g>`;
+  el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">
+    <defs>
+      <filter id="${id}-puff" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+        <!-- A blurred copy of the shape is its height: high in the middle, falling
+             off at the edge. Lighting that from the top left makes it look inflated. -->
+        <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="height"/>
+        <feDiffuseLighting in="height" surfaceScale="6" diffuseConstant="1.2" result="diffuse">
+          <feDistantLight azimuth="225" elevation="56"/>
+        </feDiffuseLighting>
+        <feSpecularLighting in="height" surfaceScale="6" specularConstant="0.6" specularExponent="22" result="specular">
+          <fePointLight x="30" y="18" z="70"/>
+        </feSpecularLighting>
+        <feComposite in="diffuse" in2="SourceAlpha" operator="in" result="diffuseIn"/>
+        <feComposite in="specular" in2="SourceAlpha" operator="in" result="specularIn"/>
+        <feBlend in="SourceGraphic" in2="diffuseIn" mode="multiply" result="lit"/>
+        <feComposite in="lit" in2="specularIn" operator="arithmetic" k2="1" k3="0.7"/>
+      </filter>
+      <g id="${id}-shape" transform="translate(50 52) scale(0.88) translate(-50 -52)">${shape}</g>
+      <mask id="${id}-mask"><use href="#${id}-shape" fill="#fff" stroke="#fff"/></mask>
+    </defs>
+    <rect width="100" height="100" fill="#1e1e1e"/>
+    <g class="face">
+      <g class="body" filter="url(#${id}-puff)">
+        <use href="#${id}-shape" fill="${color}" stroke="${color}" stroke-width="0"/>
+      </g>
+      <g mask="url(#${id}-mask)"><g class="eyes" fill="#111">${eye(46, 45 - lift, 1)}${eye(59, 41 - lift, 0.9)}</g></g>
+    </g>
+    <g class="fx" fill="#e6e6e6"></g>
+  </svg>`;
+  const face = el.querySelector('.face');
+  const body = el.querySelector('.body');
+  const eyes = el.querySelector('.eyes');
+  const fx = el.querySelector('.fx');
+  const lids = el.querySelectorAll('.lid');
+  for (const n of [body, eyes, ...lids]) Object.assign(n.style, { transformBox: 'fill-box', transformOrigin: 'center', transition: 'transform 200ms ease-out' });
+  Object.assign(face.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
+  Object.assign(fx.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
+
+  const pose = (nx, ny) => {
+    body.style.transform = `translate(${nx * 2}px, ${-ny * 2}px)`;
+    eyes.style.transform = `translate(${nx * GROK.x}px, ${-ny * GROK.y}px) scale(${1 - 0.12 * Math.abs(nx)}, ${1 - 0.08 * Math.abs(ny)})`;
+  };
+  const squint = (on) => { for (const l of lids) l.style.transform = on ? 'scaleY(0.4)' : ''; };
+  const timers = new Set();
+  const wait = (ms) => new Promise((done) => { const t = setTimeout(() => { timers.delete(t); done(); }, ms); timers.add(t); });
+  const play = (node, frames, ms, opts = {}) => node.animate(frames, { duration: ms, easing: 'ease-in-out', ...opts }).finished.catch(() => {});
+  const dot = (attrs) => {
+    const n = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    fx.append(n);
+    return n;
+  };
+  const shrink = (ms) => play(face, [
+    { transform: 'scale(1)' }, { transform: 'scale(0.4)', offset: 0.14 },
+    { transform: 'scale(0.4)', offset: 0.86 }, { transform: 'scale(1)' },
+  ], ms);
+
+  const moves = {
+    async glance() {
+      pose(-1, 0); await wait(650);
+      pose(1, 0); await wait(650);
+      pose(0, 0);
+    },
+    async squint() {
+      squint(true); await wait(200);
+      for (const [x, y] of [[-1, 0.4], [1, 0.4], [1, -0.6], [-1, -0.6]]) { pose(x, y); await wait(480); }
+      pose(0, 0); await wait(250);
+      squint(false);
+    },
+    async spin() {
+      // One eased turn about the vertical axis: the eyes slide round the sphere,
+      // narrowing toward its edge, and are hidden while they're round the back.
+      const rest = 0.2; // the eyes sit a little right of the body's front
+      const frames = [];
+      for (let i = 0; i <= 48; i++) {
+        const a = rest + Math.PI * (1 - Math.cos(Math.PI * i / 48));
+        const c = Math.cos(a);
+        frames.push({ transform: `translateX(${30 * (Math.sin(a) - Math.sin(rest))}px) scaleX(${Math.max(0.05, c / Math.cos(rest))})`, opacity: c > 0 ? 1 : 0 });
+      }
+      await play(eyes, frames, 1300, { easing: 'linear' });
+    },
+    async orbit() {
+      for (let i = 0; i < 3; i++) {
+        const a = i * 2 * Math.PI / 3;
+        dot({ cx: 50 + 27 * Math.cos(a), cy: 52 + 27 * Math.sin(a), r: 3.5 });
+      }
+      await Promise.all([shrink(3200), play(fx, [
+        { transform: 'rotate(0deg)', opacity: 0 }, { opacity: 1, offset: 0.18 },
+        { opacity: 1, offset: 0.8 }, { transform: 'rotate(720deg)', opacity: 0 },
+      ], 3200, { easing: 'linear' })]);
+      fx.replaceChildren();
+    },
+    async ping() {
+      const rings = [0, 1].map(() => dot({ cx: 50, cy: 52, r: 44, fill: 'none', stroke: '#e6e6e6', 'stroke-width': 2.5 }));
+      for (const r of rings) Object.assign(r.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
+      await Promise.all([shrink(3000), ...rings.map((r, i) => play(r, [
+        { transform: 'scale(0.35)', opacity: 0 }, { opacity: 0.9, offset: 0.08 }, { transform: 'scale(1)', opacity: 0 },
+      ], 1100, { delay: 500 + i * 800, easing: 'ease-out', fill: 'both' }))]);
+      fx.replaceChildren();
+    },
+  };
+
+  let busy = false;
+  let working = Boolean(look.working);
+  let hover = null; // [nx, ny] while the cursor is over him
+  let prev = '';
+  const next = () => {
+    clearTimeout(entry.idle);
+    if (working) entry.idle = setTimeout(perform, GROK.moveMin + Math.random() * (GROK.moveMax - GROK.moveMin));
+  };
+  async function perform() {
+    if (busy || !working || !el.isConnected) return;
+    const names = Object.keys(moves).filter((n) => n !== prev);
+    prev = names[Math.floor(Math.random() * names.length)];
+    busy = true;
+    pose(0, 0);
+    await moves[prev]();
+    busy = false;
+    pose(...(hover || [0, 0]));
+    next();
+  }
+
+  const entry = {
+    el,
+    look(dx, dy) {
+      // Like the app, he only follows the cursor while it's over him: from rest
+      // with it at his middle to a full turn with it at his edge.
+      const r = (el.clientWidth || 56) / 2;
+      hover = Math.hypot(dx, dy) <= r ? [dx / r, -dy / r] : null;
+      if (!busy) pose(...(hover || [0, 0]));
+    },
+    setWorking(on) {
+      if (on === working) return;
+      working = on;
+      next();
+    },
+    stop() {
+      clearTimeout(entry.idle);
+      for (const t of timers) clearTimeout(t);
+    },
+  };
+  pets.add(entry);
+  next();
+}
+
 // Called with the cursor's offset from the dot's center whenever it moves.
 // eslint-disable-next-line no-unused-vars
 function avatarLook(dx, dy) {
@@ -57,15 +272,21 @@ function avatarLook(dx, dy) {
 }
 // eslint-disable-next-line no-unused-vars
 function renderAvatar(box, av) {
-  const key = av ? `${av.kind}|${av.url}` : '';
-  if (box.dataset.avatar === key) return Boolean(av);
+  const key = av ? `${av.kind}|${av.url}|${av.shape}|${av.color}` : '';
+  if (box.dataset.avatar === key) {
+    for (const p of pets) if (p.el.parentNode === box) p.setWorking?.(Boolean(av?.working));
+    return Boolean(av);
+  }
   box.dataset.avatar = key;
   box.querySelector('.av')?.remove();
   for (const p of pets) if (!p.el.isConnected) { p.stop(); pets.delete(p); }
   if (!av) return false;
 
   let el;
-  if (av.kind === 'video') {
+  if (av.kind === 'grok') {
+    el = document.createElement('div');
+    grok(el, av);
+  } else if (av.kind === 'video') {
     el = Object.assign(document.createElement('video'), { muted: true, loop: true, autoplay: true, playsInline: true, src: av.url });
   } else if (av.kind === 'sprite' && av.meta.grid && av.meta.grid.cols === PET.cols && av.meta.grid.rows === PET.rows) {
     el = document.createElement('div');

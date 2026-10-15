@@ -100,9 +100,140 @@ function saveBotAvatar(id, { kind, data, url, meta }) {
   botAvatars.set(id, { kind, url: pathToFileURL(path.join(avatarDir, name)).href, meta });
 }
 
+// Grok Bot's app draws its mark in code, so there's nothing to mirror; the
+// renderer draws its own version (avatar.js).
+const isGrokBot = (p) => p.type === 'app' && path.basename(p.command?.[0] || '') === 'grok-bot';
+
+// Each Grok Bot agent picks a body shape and color. The app caches its roster
+// and the last agent you opened under its own data folder, one file per slice,
+// named in base32. We read just the shape and color of that agent.
+const grokStore = path.join(app.getPath('appData'), 'Grok Bot', 'sand-client-persistence');
+let grokLook = null; // { shape, color, agent }
+
+function base32(s) {
+  const abc = 'abcdefghijklmnopqrstuvwxyz234567';
+  const out = [];
+  let bits = 0;
+  let val = 0;
+  for (const c of s) {
+    const i = abc.indexOf(c);
+    if (i < 0) return '';
+    val = ((val << 5) | i) & 0xfff;
+    bits += 5;
+    if (bits >= 8) { bits -= 8; out.push((val >> bits) & 0xff); }
+  }
+  return Buffer.from(out).toString('utf8');
+}
+
+function readGrokLook() {
+  const slices = new Map(); // account prefix -> { roster, agent, mtime }
+  let files = [];
+  try { files = fs.readdirSync(grokStore); } catch { return null; }
+  for (const f of files) {
+    const m = base32(f.replace(/\.blob$/, '')).match(/^(.*)\.(roster\.last-roster|selection\.last-agent)$/);
+    if (!m) continue;
+    const file = path.join(grokStore, f);
+    const s = slices.get(m[1]) || {};
+    s[m[2] === 'roster.last-roster' ? 'roster' : 'agent'] = file;
+    if (m[2] === 'roster.last-roster') { try { s.mtime = fs.statSync(file).mtimeMs; } catch { /* gone mid-read */ } }
+    slices.set(m[1], s);
+  }
+  // Several accounts can be cached; the one whose roster changed last is in use.
+  const s = [...slices.values()].filter((x) => x.roster).sort((a, b) => (b.mtime || 0) - (a.mtime || 0))[0];
+  if (!s) return null;
+  try {
+    const rows = JSON.parse(fs.readFileSync(s.roster, 'utf8')).value?.rows || [];
+    let id = null;
+    try { id = JSON.parse(fs.readFileSync(s.agent, 'utf8')).value?.agentId; } catch { /* no agent opened yet */ }
+    const row = rows.find((r) => r.id === id) || rows[0];
+    return row ? { shape: String(row.avatarShape || ''), color: String(row.avatarColor || ''), agent: String(row.id) } : null;
+  } catch { return null; }
+}
+
+// Grok Bot doesn't record when an agent is busy, and its agents run in the
+// cloud, so "working" is a best guess from two things we can see. While its
+// window is showing, the renderer works hard during a run and sits near zero
+// otherwise (read from /proc, Linux only). Hidden, that window is throttled, so
+// a new message saved to the agent's chat history counts as well.
+const GROK_BUSY = { pollMs: 2000, share: 0.06, holdMs: 6000, chatHoldMs: 8000 };
+let grokWorking = false;
+let grokCpuAt = 0;
+let grokChatAt = 0;
+
+function refreshGrokWorking() {
+  const now = Date.now();
+  const working = now - grokCpuAt < GROK_BUSY.holdMs || now - grokChatAt < GROK_BUSY.chatHoldMs;
+  if (working !== grokWorking) { grokWorking = working; broadcast(); }
+}
+
+function grokRenderers() {
+  const pids = [];
+  for (const pid of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(pid)) continue;
+    let cmd = '';
+    try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8'); } catch { continue; }
+    // Electron may fold the whole command line into argv[0].
+    if (path.basename(cmd.split('\0')[0].split(' --')[0]) === 'grok-bot' && cmd.includes('--type=renderer')) pids.push(pid);
+  }
+  return pids;
+}
+
+function cpuTicks(pid) {
+  // utime and stime, fields 14 and 15; the name before them can hold spaces.
+  const f = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(')').pop().trim().split(' ');
+  return Number(f[11]) + Number(f[12]);
+}
+
+function watchGrokWork() {
+  let pids = [];
+  let last = null;
+  const sample = () => {
+    let ticks = 0;
+    try {
+      if (!pids.length) pids = grokRenderers();
+      for (const pid of pids) ticks += cpuTicks(pid);
+    } catch { pids = []; last = null; return; } // a renderer went away; find them again
+    const now = Date.now();
+    if (pids.length && last && ticks - last.ticks > GROK_BUSY.share * 100 * ((now - last.at) / 1000)) grokCpuAt = now;
+    last = pids.length ? { ticks, at: now } : null;
+  };
+  setInterval(() => {
+    if (!cfg.providers.some(isGrokBot)) return;
+    if (process.platform === 'linux') sample();
+    refreshGrokWorking();
+  }, GROK_BUSY.pollMs);
+}
+
+function watchGrokRoster() {
+  const update = () => {
+    const next = readGrokLook();
+    if (JSON.stringify(next) === JSON.stringify(grokLook)) return;
+    grokLook = next;
+    broadcast();
+    settingsWin?.webContents.send('settings:avatars');
+  };
+  grokLook = readGrokLook();
+  let timer = null;
+  try {
+    let pickedAt = 0;
+    fs.watch(grokStore, (_e, f) => {
+      const name = f ? base32(f.replace(/\.blob.*$/, '')) : '';
+      if (name.endsWith('.selection.last-agent')) pickedAt = Date.now();
+      // Opening an agent re-saves its chat too, so only count saves after that.
+      else if (grokLook?.agent && name.includes(`.transcript.replicas.${grokLook.agent}`) && Date.now() - pickedAt > 3000) {
+        grokChatAt = Date.now();
+        refreshGrokWorking();
+      }
+      clearTimeout(timer);
+      timer = setTimeout(update, 500);
+    });
+  } catch { /* Grok Bot isn't installed or hasn't run yet */ }
+}
+
 // "bot": the bot's own (animated) avatar when we have one; else the custom image; else the default.
 function avatarFor(p) {
-  const mode = p.avatarMode || (p.type === 'web' ? 'bot' : 'custom');
+  const mode = p.avatarMode || (p.type === 'web' || isGrokBot(p) ? 'bot' : 'custom');
+  if (mode === 'bot' && isGrokBot(p)) return { kind: 'grok', shape: grokLook?.shape, color: grokLook?.color, working: grokWorking };
   if (mode === 'bot' && botAvatars.has(p.id)) return botAvatars.get(p.id);
   const url = avatarUrl(p);
   return url ? { kind: 'img', url } : null;
@@ -373,13 +504,13 @@ function broadcast() {
   updateLook();
 }
 
-// Pet avatars turn their head toward the cursor, so while one is on the dot we
+// Pet avatars (and Grok's) turn toward the cursor, so while one is on the dot we
 // feed the renderer the cursor's offset from the dot (only when it moves).
 let lookTimer = null;
 let lastLook = null;
 function updateLook() {
   const av = state.pos && avatarFor(dotProvider());
-  const want = Boolean(av?.kind === 'sprite' && av.meta?.grid);
+  const want = Boolean((av?.kind === 'sprite' && av.meta?.grid) || av?.kind === 'grok');
   if (want && !lookTimer) {
     lookTimer = setInterval(async () => {
       const c = hypr.available ? await hypr.cursor().catch(() => null) : screen.getCursorScreenPoint();
@@ -523,6 +654,7 @@ function settingsPayload() {
     presets,
     avatars: Object.fromEntries(cfg.providers.map((p) => [p.id, avatarFor(p)])),
     botAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, botAvatars.has(p.id)])),
+    drawnAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, isGrokBot(p)])),
     locked: state.locked,
     autostart: autostartOn(),
     version: app.getVersion(),
@@ -674,6 +806,8 @@ async function boot() {
       if (botAvatars.get(id)?.url !== before) { broadcast(); settingsWin?.webContents.send('settings:avatars'); }
     },
   });
+  watchGrokRoster();
+  watchGrokWork();
   // A saved spot on a monitor that's gone would strand the dot off-screen.
   const center = state.pos && { x: state.pos.x + DOT / 2, y: state.pos.y + DOT / 2 };
   if (!center || !(await monitors()).some((b) => inside(center, b))) state.pos = await defaultPos();
