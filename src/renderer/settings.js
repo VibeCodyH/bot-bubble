@@ -168,8 +168,10 @@ function renderEditor(li, p) {
 
   const pick = document.createElement('div');
   pick.className = 'avatar-pick';
-  // Web bots default to their own avatar from the page; anything can use a custom image.
-  const canMirror = p.type === 'web';
+  // Web bots default to their own avatar from the page, and Grok Bot to the one
+  // we draw for it; anything can use a custom image.
+  const drawn = Boolean(data.drawnAvatars[p.id]);
+  const canMirror = p.type === 'web' || drawn;
   const mode = canMirror ? (p.avatarMode || 'bot') : 'custom';
   let hint;
   if (canMirror) {
@@ -185,7 +187,9 @@ function renderEditor(li, p) {
       seg.append(b);
     }
     pick.append(seg);
-    if (mode === 'bot') {
+    if (mode === 'bot' && drawn) {
+      hint = `An animated ${p.label} that looks toward your cursor.`;
+    } else if (mode === 'bot') {
       hint = data.botAvatars[p.id]
         ? `Mirrors the avatar from ${p.label}, animation included. Change it in ${p.label} and the dot follows.`
         : `Appears once ${p.label} has loaded its avatar. Open its tab once if it hasn't.${p.browser ? ' In real-browser mode this needs Brave or Chromium.' : ''}`;

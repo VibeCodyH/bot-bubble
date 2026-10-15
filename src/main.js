@@ -100,9 +100,14 @@ function saveBotAvatar(id, { kind, data, url, meta }) {
   botAvatars.set(id, { kind, url: pathToFileURL(path.join(avatarDir, name)).href, meta });
 }
 
+// Grok Bot's app draws its mark in code, so there's nothing to mirror; the
+// renderer draws its own version (avatar.js).
+const isGrokBot = (p) => p.type === 'app' && path.basename(p.command?.[0] || '') === 'grok-bot';
+
 // "bot": the bot's own (animated) avatar when we have one; else the custom image; else the default.
 function avatarFor(p) {
-  const mode = p.avatarMode || (p.type === 'web' ? 'bot' : 'custom');
+  const mode = p.avatarMode || (p.type === 'web' || isGrokBot(p) ? 'bot' : 'custom');
+  if (mode === 'bot' && isGrokBot(p)) return { kind: 'grok' };
   if (mode === 'bot' && botAvatars.has(p.id)) return botAvatars.get(p.id);
   const url = avatarUrl(p);
   return url ? { kind: 'img', url } : null;
@@ -373,13 +378,13 @@ function broadcast() {
   updateLook();
 }
 
-// Pet avatars turn their head toward the cursor, so while one is on the dot we
+// Pet avatars (and Grok's) turn toward the cursor, so while one is on the dot we
 // feed the renderer the cursor's offset from the dot (only when it moves).
 let lookTimer = null;
 let lastLook = null;
 function updateLook() {
   const av = state.pos && avatarFor(dotProvider());
-  const want = Boolean(av?.kind === 'sprite' && av.meta?.grid);
+  const want = Boolean((av?.kind === 'sprite' && av.meta?.grid) || av?.kind === 'grok');
   if (want && !lookTimer) {
     lookTimer = setInterval(async () => {
       const c = hypr.available ? await hypr.cursor().catch(() => null) : screen.getCursorScreenPoint();
@@ -523,6 +528,7 @@ function settingsPayload() {
     presets,
     avatars: Object.fromEntries(cfg.providers.map((p) => [p.id, avatarFor(p)])),
     botAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, botAvatars.has(p.id)])),
+    drawnAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, isGrokBot(p)])),
     locked: state.locked,
     autostart: autostartOn(),
     version: app.getVersion(),
