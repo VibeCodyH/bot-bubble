@@ -48,31 +48,130 @@ function pet(el, url, m) {
 }
 
 // Grok Bot: its app draws the mark in code and has no page to mirror, so this is
-// our own take on it. A lit sphere whose eyes turn toward the cursor, then settle
-// back to rest. Like the app, there's no idle loop.
-const GROK = { restMs: 2500, x: 10, y: 8 };
+// our own take on it. A lit sphere whose eyes turn toward the cursor and settle
+// back to rest. Once the cursor has been still a while he does one of the app's
+// moves: a glance around, a spin, a squinting scan, or shrinking to a small dot
+// with dots orbiting him or rings pinging out.
+const GROK = { restMs: 2500, x: 10, y: 8, idleMin: 6000, idleMax: 14000 };
 let grokIds = 0;
 
 function grok(el) {
   const id = `grok-${++grokIds}`;
-  const eye = (cx, cy, k) => `<rect x="${cx - 6.5 * k}" y="${cy - 15.5 * k}" width="${13 * k}" height="${31 * k}" rx="${6.5 * k}" transform="rotate(-38 ${cx} ${cy})"/>`;
+  const eye = (cx, cy, k) => `<g transform="rotate(-38 ${cx} ${cy})"><rect class="lid" x="${cx - 6.5 * k}" y="${cy - 15.5 * k}" width="${13 * k}" height="${31 * k}" rx="${6.5 * k}"/></g>`;
   el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">
     <defs>
       <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="60" cy="50" r="72">
         <stop offset="0" stop-color="#fff"/><stop offset="0.45" stop-color="#dedede"/><stop offset="1" stop-color="#8a8a8a"/>
       </radialGradient>
+      <clipPath id="${id}-clip"><circle cx="48" cy="73" r="55"/></clipPath>
     </defs>
     <rect width="100" height="100" fill="#1e1e1e"/>
-    <circle class="body" cx="48" cy="73" r="55" fill="url(#${id})"/>
-    <g class="eyes" fill="#111">${eye(45, 60, 1)}${eye(74, 48, 0.85)}</g>
+    <g class="face">
+      <circle class="body" cx="48" cy="73" r="55" fill="url(#${id})"/>
+      <g clip-path="url(#${id}-clip)"><g class="eyes" fill="#111">${eye(45, 60, 1)}${eye(74, 48, 0.85)}</g></g>
+    </g>
+    <g class="fx" fill="#e6e6e6"></g>
   </svg>`;
+  const face = el.querySelector('.face');
   const body = el.querySelector('.body');
   const eyes = el.querySelector('.eyes');
-  for (const n of [body, eyes]) Object.assign(n.style, { transformBox: 'fill-box', transformOrigin: 'center', transition: 'transform 200ms ease-out' });
+  const fx = el.querySelector('.fx');
+  const lids = el.querySelectorAll('.lid');
+  for (const n of [body, eyes, ...lids]) Object.assign(n.style, { transformBox: 'fill-box', transformOrigin: 'center', transition: 'transform 200ms ease-out' });
+  // Shrinking scales the face about the point that lands the sphere in the middle.
+  Object.assign(face.style, { transformBox: 'view-box', transformOrigin: '51px 39px' });
+  Object.assign(fx.style, { transformBox: 'view-box', transformOrigin: '50px 50px' });
+
   const pose = (nx, ny) => {
     body.style.transform = `translate(${nx * 2}px, ${-ny * 2}px)`;
     eyes.style.transform = `translate(${nx * GROK.x}px, ${-ny * GROK.y}px) scale(${1 - 0.12 * Math.abs(nx)}, ${1 - 0.08 * Math.abs(ny)})`;
   };
+  const squint = (on) => { for (const l of lids) l.style.transform = on ? 'scaleY(0.4)' : ''; };
+  const timers = new Set();
+  const wait = (ms) => new Promise((done) => { const t = setTimeout(() => { timers.delete(t); done(); }, ms); timers.add(t); });
+  const play = (node, frames, ms, opts = {}) => node.animate(frames, { duration: ms, easing: 'ease-in-out', ...opts }).finished.catch(() => {});
+  const dot = (attrs) => {
+    const n = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    fx.append(n);
+    return n;
+  };
+  const shrink = (ms) => play(face, [
+    { transform: 'scale(1)' }, { transform: 'scale(0.32)', offset: 0.14 },
+    { transform: 'scale(0.32)', offset: 0.86 }, { transform: 'scale(1)' },
+  ], ms);
+
+  const moves = {
+    async glance() {
+      pose(-1, 0); await wait(650);
+      pose(1, 0); await wait(650);
+      pose(0, 0);
+    },
+    async squint() {
+      squint(true); await wait(200);
+      for (const [x, y] of [[-1, 0.4], [1, 0.4], [1, -0.6], [-1, -0.6]]) { pose(x, y); await wait(480); }
+      pose(0, 0); await wait(250);
+      squint(false);
+    },
+    async spin() {
+      // One eased turn about the vertical axis: the eyes slide round the sphere,
+      // narrowing toward its edge, and are hidden while they're round the back.
+      const rest = 0.3; // the eyes sit a little right of the sphere's front
+      const frames = [];
+      for (let i = 0; i <= 48; i++) {
+        const a = rest + Math.PI * (1 - Math.cos(Math.PI * i / 48));
+        const c = Math.cos(a);
+        frames.push({ transform: `translateX(${42 * (Math.sin(a) - Math.sin(rest))}px) scaleX(${Math.max(0.05, c / Math.cos(rest))})`, opacity: c > 0 ? 1 : 0 });
+      }
+      await play(eyes, frames, 1300, { easing: 'linear' });
+    },
+    async orbit() {
+      for (let i = 0; i < 3; i++) {
+        const a = i * 2 * Math.PI / 3;
+        dot({ cx: 50 + 27 * Math.cos(a), cy: 50 + 27 * Math.sin(a), r: 3.5 });
+      }
+      await Promise.all([shrink(3200), play(fx, [
+        { transform: 'rotate(0deg)', opacity: 0 }, { opacity: 1, offset: 0.18 },
+        { opacity: 1, offset: 0.8 }, { transform: 'rotate(720deg)', opacity: 0 },
+      ], 3200, { easing: 'linear' })]);
+      fx.replaceChildren();
+    },
+    async ping() {
+      const rings = [0, 1].map(() => dot({ cx: 50, cy: 50, r: 44, fill: 'none', stroke: '#e6e6e6', 'stroke-width': 2.5 }));
+      for (const r of rings) Object.assign(r.style, { transformBox: 'view-box', transformOrigin: '50px 50px' });
+      await Promise.all([shrink(3000), ...rings.map((r, i) => play(r, [
+        { transform: 'scale(0.35)', opacity: 0 }, { opacity: 0.9, offset: 0.08 }, { transform: 'scale(1)', opacity: 0 },
+      ], 1100, { delay: 500 + i * 800, easing: 'ease-out', fill: 'both' }))]);
+      fx.replaceChildren();
+    },
+  };
+
+  let busy = false;
+  let last = [0, 0];
+  let lastAt = 0;
+  let prev = '';
+  const aim = () => {
+    pose(...last);
+    clearTimeout(entry.rest);
+    entry.rest = setTimeout(() => pose(0, 0), GROK.restMs);
+  };
+  const next = () => {
+    clearTimeout(entry.idle);
+    entry.idle = setTimeout(perform, GROK.idleMin + Math.random() * (GROK.idleMax - GROK.idleMin));
+  };
+  async function perform() {
+    if (busy || !el.isConnected) return;
+    const names = Object.keys(moves).filter((n) => n !== prev);
+    prev = names[Math.floor(Math.random() * names.length)];
+    busy = true;
+    pose(0, 0);
+    await moves[prev]();
+    busy = false;
+    // Pick the cursor back up if it moved while he was busy.
+    if (Date.now() - lastAt < GROK.restMs) aim();
+    next();
+  }
+
   const entry = {
     el,
     look(dx, dy) {
@@ -80,13 +179,19 @@ function grok(el) {
       // so the gaze saturates instead of chasing the cursor across the screen.
       const w = 2 * (el.clientWidth || 56);
       const clamp = (v) => Math.max(-1, Math.min(1, v));
-      pose(clamp(dx / w), clamp(-dy / w));
-      clearTimeout(entry.rest);
-      entry.rest = setTimeout(() => pose(0, 0), GROK.restMs);
+      last = [clamp(dx / w), clamp(-dy / w)];
+      lastAt = Date.now();
+      if (!busy) aim();
+      next();
     },
-    stop() { clearTimeout(entry.rest); },
+    stop() {
+      clearTimeout(entry.rest);
+      clearTimeout(entry.idle);
+      for (const t of timers) clearTimeout(t);
+    },
   };
   pets.add(entry);
+  next();
 }
 
 // Called with the cursor's offset from the dot's center whenever it moves.
