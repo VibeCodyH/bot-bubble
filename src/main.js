@@ -104,10 +104,71 @@ function saveBotAvatar(id, { kind, data, url, meta }) {
 // renderer draws its own version (avatar.js).
 const isGrokBot = (p) => p.type === 'app' && path.basename(p.command?.[0] || '') === 'grok-bot';
 
+// Each Grok Bot agent picks a body shape and color. The app caches its roster
+// and the last agent you opened under its own data folder, one file per slice,
+// named in base32. We read just the shape and color of that agent.
+const grokStore = path.join(app.getPath('appData'), 'Grok Bot', 'sand-client-persistence');
+let grokLook = null; // { shape, color }
+
+function base32(s) {
+  const abc = 'abcdefghijklmnopqrstuvwxyz234567';
+  const out = [];
+  let bits = 0;
+  let val = 0;
+  for (const c of s) {
+    const i = abc.indexOf(c);
+    if (i < 0) return '';
+    val = ((val << 5) | i) & 0xfff;
+    bits += 5;
+    if (bits >= 8) { bits -= 8; out.push((val >> bits) & 0xff); }
+  }
+  return Buffer.from(out).toString('utf8');
+}
+
+function readGrokLook() {
+  const slices = new Map(); // account prefix -> { roster, agent, mtime }
+  let files = [];
+  try { files = fs.readdirSync(grokStore); } catch { return null; }
+  for (const f of files) {
+    const m = base32(f.replace(/\.blob$/, '')).match(/^(.*)\.(roster\.last-roster|selection\.last-agent)$/);
+    if (!m) continue;
+    const file = path.join(grokStore, f);
+    const s = slices.get(m[1]) || {};
+    s[m[2] === 'roster.last-roster' ? 'roster' : 'agent'] = file;
+    if (m[2] === 'roster.last-roster') { try { s.mtime = fs.statSync(file).mtimeMs; } catch { /* gone mid-read */ } }
+    slices.set(m[1], s);
+  }
+  // Several accounts can be cached; the one whose roster changed last is in use.
+  const s = [...slices.values()].filter((x) => x.roster).sort((a, b) => (b.mtime || 0) - (a.mtime || 0))[0];
+  if (!s) return null;
+  try {
+    const rows = JSON.parse(fs.readFileSync(s.roster, 'utf8')).value?.rows || [];
+    let id = null;
+    try { id = JSON.parse(fs.readFileSync(s.agent, 'utf8')).value?.agentId; } catch { /* no agent opened yet */ }
+    const row = rows.find((r) => r.id === id) || rows[0];
+    return row ? { shape: String(row.avatarShape || ''), color: String(row.avatarColor || '') } : null;
+  } catch { return null; }
+}
+
+function watchGrokRoster() {
+  const update = () => {
+    const next = readGrokLook();
+    if (JSON.stringify(next) === JSON.stringify(grokLook)) return;
+    grokLook = next;
+    broadcast();
+    settingsWin?.webContents.send('settings:avatars');
+  };
+  grokLook = readGrokLook();
+  let timer = null;
+  try {
+    fs.watch(grokStore, () => { clearTimeout(timer); timer = setTimeout(update, 500); });
+  } catch { /* Grok Bot isn't installed or hasn't run yet */ }
+}
+
 // "bot": the bot's own (animated) avatar when we have one; else the custom image; else the default.
 function avatarFor(p) {
   const mode = p.avatarMode || (p.type === 'web' || isGrokBot(p) ? 'bot' : 'custom');
-  if (mode === 'bot' && isGrokBot(p)) return { kind: 'grok' };
+  if (mode === 'bot' && isGrokBot(p)) return { kind: 'grok', ...grokLook };
   if (mode === 'bot' && botAvatars.has(p.id)) return botAvatars.get(p.id);
   const url = avatarUrl(p);
   return url ? { kind: 'img', url } : null;
@@ -680,6 +741,7 @@ async function boot() {
       if (botAvatars.get(id)?.url !== before) { broadcast(); settingsWin?.webContents.send('settings:avatars'); }
     },
   });
+  watchGrokRoster();
   // A saved spot on a monitor that's gone would strand the dot off-screen.
   const center = state.pos && { x: state.pos.x + DOT / 2, y: state.pos.y + DOT / 2 };
   if (!center || !(await monitors()).some((b) => inside(center, b))) state.pos = await defaultPos();

@@ -48,27 +48,88 @@ function pet(el, url, m) {
 }
 
 // Grok Bot: its app draws the mark in code and has no page to mirror, so this is
-// our own take on it. A lit sphere whose eyes turn toward the cursor and settle
-// back to rest. Once the cursor has been still a while he does one of the app's
+// our own take on it, in the shape and color of the agent you last opened there
+// (main.js reads those). The eyes turn toward the cursor and settle back to rest. Once the cursor has been still a while he does one of the app's
 // moves: a glance around, a spin, a squinting scan, or shrinking to a small dot
 // with dots orbiting him or rings pinging out.
-const GROK = { restMs: 2500, x: 10, y: 8, idleMin: 6000, idleMax: 14000 };
+const GROK = { restMs: 2500, x: 7, y: 6, idleMin: 6000, idleMax: 14000 };
 let grokIds = 0;
 
-function grok(el) {
+// Body colors, as Grok Bot paints them on a dark background (light -> shade).
+const GROK_COLORS = {
+  black: ['#FFFFFF', '#C2C2C2'], brown: ['#A27952', '#604227'], red: ['#FF3E51', '#A21826'],
+  orange: ['#FF781C', '#C24E00'], yellow: ['#FFA31C', '#C27400'], green: ['#00C972', '#008048'],
+  cyan: ['#1CC3B0', '#007769'], blue: ['#2A92FE', '#0C64C1'], violet: ['#9159FE', '#5C39A1'],
+  magenta: ['#FF47A6', '#A21E62'], gray: ['#B7B7B7', '#777777'],
+};
+
+// Body shapes in a 100x100 box, centered near (50, 52). A stroke-width on a
+// shape rounds its corners (the stroke is painted in the body color).
+const poly = (pts) => `<polygon points="${pts.map((q) => q.join(',')).join(' ')}" stroke-width="10" stroke-linejoin="round"/>`;
+const ring = (n, r1, r2, turn = -90) => Array.from({ length: n * (r2 ? 2 : 1) }, (_, i) => {
+  const a = (turn + i * 360 / (n * (r2 ? 2 : 1))) * Math.PI / 180;
+  const r = r2 && i % 2 ? r2 : r1;
+  return [+(50 + r * Math.cos(a)).toFixed(1), +(52 + r * Math.sin(a)).toFixed(1)];
+});
+const GROK_SHAPES = {
+  blob: '<circle cx="50" cy="52" r="40"/>',
+  pebble: '<ellipse cx="50" cy="54" rx="38" ry="31" transform="rotate(-8 50 54)"/>',
+  bean: '<path d="M34 20C58 12 84 28 82 54C80 78 58 90 38 84C20 78 14 60 26 52C34 47 36 40 28 32C24 26 28 21 34 20Z"/>',
+  egg: '<path d="M50 14C70 14 82 46 82 62C82 80 68 90 50 90C32 90 18 80 18 62C18 46 30 14 50 14Z"/>',
+  squircle: '<rect x="16" y="18" width="68" height="68" rx="26"/>',
+  tablet: '<rect x="24" y="14" width="52" height="76" rx="20"/>',
+  capsule: '<rect x="27" y="12" width="46" height="80" rx="23"/>',
+  cylinder: '<path d="M22 28A28 10 0 0 1 78 28V78A28 10 0 0 1 22 78Z"/>',
+  hex: poly(ring(6, 34)),
+  gem: poly([[27, 33], [40, 21], [60, 21], [73, 33], [50, 83]]),
+  crystal: poly([[50, 13], [69, 33], [69, 71], [50, 91], [31, 71], [31, 33]]),
+  wedge: '<polygon points="50,22 82,80 18,80" stroke-width="16" stroke-linejoin="round"/>',
+  shield: '<path d="M50 15L79 25C79 56 70 76 50 88C30 76 21 56 21 25Z" stroke-width="8" stroke-linejoin="round"/>',
+  dome: '<path d="M17 80V56A33 33 0 0 1 83 56V80Z" stroke-width="8" stroke-linejoin="round"/>',
+  arch: '<path d="M17 84V50A33 33 0 0 1 83 50V84H63V56A13 13 0 0 0 37 56V84Z" stroke-width="8" stroke-linejoin="round"/>',
+  cloud: '<circle cx="33" cy="58" r="19"/><circle cx="53" cy="44" r="24"/><circle cx="70" cy="60" r="18"/><rect x="30" y="56" width="42" height="22" rx="11"/>',
+  teardrop: '<path d="M50 12C62 32 80 46 80 62A30 30 0 0 1 20 62C20 46 38 32 50 12Z"/>',
+  leaf: '<path d="M50 10C78 30 82 64 50 92C18 64 22 30 50 10Z" transform="rotate(28 50 51)"/>',
+  square: '<rect x="18" y="20" width="64" height="64" rx="8"/>',
+  sparkle: '<path d="M50 10Q58 44 90 52Q58 60 50 94Q42 60 10 52Q42 44 50 10Z" stroke-width="6" stroke-linejoin="round"/>',
+  clover: '<circle cx="35" cy="37" r="17"/><circle cx="65" cy="37" r="17"/><circle cx="35" cy="67" r="17"/><circle cx="65" cy="67" r="17"/><circle cx="50" cy="52" r="16"/>',
+  flower: `${ring(6, 21).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="15"/>`).join('')}<circle cx="50" cy="52" r="22"/>`,
+  heart: '<path d="M50 86C18 64 12 44 22 30C32 17 46 22 50 32C54 22 68 17 78 30C88 44 82 64 50 86Z" stroke-width="8" stroke-linejoin="round"/>',
+  house: poly([[50, 18], [83, 45], [83, 84], [17, 84], [17, 45]]),
+  star: '<polygon points="' + ring(6, 40, 25).map((q) => q.join(',')).join(' ') + '" stroke-width="8" stroke-linejoin="round"/>',
+};
+// The arch's eyes sit above its opening.
+const GROK_EYE_LIFT = { arch: 10, horseshoe: 10 };
+// Older or internal names the app also uses.
+Object.assign(GROK_SHAPES, {
+  sphere: GROK_SHAPES.blob, heartChubby: GROK_SHAPES.heart, starFlower: GROK_SHAPES.flower,
+  star6: GROK_SHAPES.star, horseshoe: GROK_SHAPES.arch, hexagon: GROK_SHAPES.hex, spark: GROK_SHAPES.sparkle,
+});
+
+function grok(el, look) {
   const id = `grok-${++grokIds}`;
-  const eye = (cx, cy, k) => `<g transform="rotate(-38 ${cx} ${cy})"><rect class="lid" x="${cx - 6.5 * k}" y="${cy - 15.5 * k}" width="${13 * k}" height="${31 * k}" rx="${6.5 * k}"/></g>`;
+  const shape = GROK_SHAPES[look.shape] || GROK_SHAPES.blob;
+  const [light, shade] = GROK_COLORS[look.color] || GROK_COLORS.black;
+  const lift = GROK_EYE_LIFT[look.shape] || 0;
+  const eye = (cx, cy, k) => `<g transform="rotate(-30 ${cx} ${cy})"><rect class="lid" x="${cx - 4.8 * k}" y="${cy - 11 * k}" width="${9.6 * k}" height="${22 * k}" rx="${4.8 * k}"/></g>`;
   el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">
     <defs>
-      <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="60" cy="50" r="72">
-        <stop offset="0" stop-color="#fff"/><stop offset="0.45" stop-color="#dedede"/><stop offset="1" stop-color="#8a8a8a"/>
+      <linearGradient id="${id}-fill" gradientUnits="userSpaceOnUse" x1="18" y1="16" x2="82" y2="90">
+        <stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${shade}"/>
+      </linearGradient>
+      <radialGradient id="${id}-shine" gradientUnits="userSpaceOnUse" cx="42" cy="36" r="42">
+        <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
       </radialGradient>
-      <clipPath id="${id}-clip"><circle cx="48" cy="73" r="55"/></clipPath>
+      <g id="${id}-shape" transform="translate(50 52) scale(0.88) translate(-50 -52)">${shape}</g>
+      <mask id="${id}-mask"><use href="#${id}-shape" fill="#fff" stroke="#fff"/></mask>
     </defs>
     <rect width="100" height="100" fill="#1e1e1e"/>
     <g class="face">
-      <circle class="body" cx="48" cy="73" r="55" fill="url(#${id})"/>
-      <g clip-path="url(#${id}-clip)"><g class="eyes" fill="#111">${eye(45, 60, 1)}${eye(74, 48, 0.85)}</g></g>
+      <g class="body">
+        <use href="#${id}-shape" fill="url(#${id}-fill)" stroke="url(#${id}-fill)" stroke-width="0"/>
+        <rect width="100" height="100" fill="url(#${id}-shine)" mask="url(#${id}-mask)"/>
+      </g>
+      <g mask="url(#${id}-mask)"><g class="eyes" fill="#111">${eye(43, 54 - lift, 1)}${eye(62, 47 - lift, 0.88)}</g></g>
     </g>
     <g class="fx" fill="#e6e6e6"></g>
   </svg>`;
@@ -78,9 +139,8 @@ function grok(el) {
   const fx = el.querySelector('.fx');
   const lids = el.querySelectorAll('.lid');
   for (const n of [body, eyes, ...lids]) Object.assign(n.style, { transformBox: 'fill-box', transformOrigin: 'center', transition: 'transform 200ms ease-out' });
-  // Shrinking scales the face about the point that lands the sphere in the middle.
-  Object.assign(face.style, { transformBox: 'view-box', transformOrigin: '51px 39px' });
-  Object.assign(fx.style, { transformBox: 'view-box', transformOrigin: '50px 50px' });
+  Object.assign(face.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
+  Object.assign(fx.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
 
   const pose = (nx, ny) => {
     body.style.transform = `translate(${nx * 2}px, ${-ny * 2}px)`;
@@ -97,8 +157,8 @@ function grok(el) {
     return n;
   };
   const shrink = (ms) => play(face, [
-    { transform: 'scale(1)' }, { transform: 'scale(0.32)', offset: 0.14 },
-    { transform: 'scale(0.32)', offset: 0.86 }, { transform: 'scale(1)' },
+    { transform: 'scale(1)' }, { transform: 'scale(0.4)', offset: 0.14 },
+    { transform: 'scale(0.4)', offset: 0.86 }, { transform: 'scale(1)' },
   ], ms);
 
   const moves = {
@@ -116,19 +176,19 @@ function grok(el) {
     async spin() {
       // One eased turn about the vertical axis: the eyes slide round the sphere,
       // narrowing toward its edge, and are hidden while they're round the back.
-      const rest = 0.3; // the eyes sit a little right of the sphere's front
+      const rest = 0.2; // the eyes sit a little right of the body's front
       const frames = [];
       for (let i = 0; i <= 48; i++) {
         const a = rest + Math.PI * (1 - Math.cos(Math.PI * i / 48));
         const c = Math.cos(a);
-        frames.push({ transform: `translateX(${42 * (Math.sin(a) - Math.sin(rest))}px) scaleX(${Math.max(0.05, c / Math.cos(rest))})`, opacity: c > 0 ? 1 : 0 });
+        frames.push({ transform: `translateX(${30 * (Math.sin(a) - Math.sin(rest))}px) scaleX(${Math.max(0.05, c / Math.cos(rest))})`, opacity: c > 0 ? 1 : 0 });
       }
       await play(eyes, frames, 1300, { easing: 'linear' });
     },
     async orbit() {
       for (let i = 0; i < 3; i++) {
         const a = i * 2 * Math.PI / 3;
-        dot({ cx: 50 + 27 * Math.cos(a), cy: 50 + 27 * Math.sin(a), r: 3.5 });
+        dot({ cx: 50 + 27 * Math.cos(a), cy: 52 + 27 * Math.sin(a), r: 3.5 });
       }
       await Promise.all([shrink(3200), play(fx, [
         { transform: 'rotate(0deg)', opacity: 0 }, { opacity: 1, offset: 0.18 },
@@ -137,8 +197,8 @@ function grok(el) {
       fx.replaceChildren();
     },
     async ping() {
-      const rings = [0, 1].map(() => dot({ cx: 50, cy: 50, r: 44, fill: 'none', stroke: '#e6e6e6', 'stroke-width': 2.5 }));
-      for (const r of rings) Object.assign(r.style, { transformBox: 'view-box', transformOrigin: '50px 50px' });
+      const rings = [0, 1].map(() => dot({ cx: 50, cy: 52, r: 44, fill: 'none', stroke: '#e6e6e6', 'stroke-width': 2.5 }));
+      for (const r of rings) Object.assign(r.style, { transformBox: 'view-box', transformOrigin: '50px 52px' });
       await Promise.all([shrink(3000), ...rings.map((r, i) => play(r, [
         { transform: 'scale(0.35)', opacity: 0 }, { opacity: 0.9, offset: 0.08 }, { transform: 'scale(1)', opacity: 0 },
       ], 1100, { delay: 500 + i * 800, easing: 'ease-out', fill: 'both' }))]);
@@ -204,7 +264,7 @@ function avatarLook(dx, dy) {
 }
 // eslint-disable-next-line no-unused-vars
 function renderAvatar(box, av) {
-  const key = av ? `${av.kind}|${av.url}` : '';
+  const key = av ? `${av.kind}|${av.url}|${av.shape}|${av.color}` : '';
   if (box.dataset.avatar === key) return Boolean(av);
   box.dataset.avatar = key;
   box.querySelector('.av')?.remove();
@@ -214,7 +274,7 @@ function renderAvatar(box, av) {
   let el;
   if (av.kind === 'grok') {
     el = document.createElement('div');
-    grok(el);
+    grok(el, av);
   } else if (av.kind === 'video') {
     el = Object.assign(document.createElement('video'), { muted: true, loop: true, autoplay: true, playsInline: true, src: av.url });
   } else if (av.kind === 'sprite' && av.meta.grid && av.meta.grid.cols === PET.cols && av.meta.grid.rows === PET.rows) {
