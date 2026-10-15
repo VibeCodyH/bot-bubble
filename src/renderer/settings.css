@@ -126,6 +126,7 @@ input.switch:disabled { opacity: 0.4; cursor: default; }
 }
 .avatar { position: relative; }
 .avatar .av { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; overflow: hidden; border-radius: 50%; clip-path: circle(50%); }
+.av svg { width: 100%; height: 100%; stroke: none; } /* the drawn Grok face, not an icon */
 .seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-2); }
 .seg button { height: 26px; padding: 0 12px; border-radius: 999px; color: var(--muted); font-weight: 500; }
 .seg button.on { background: rgba(255, 255, 255, 0.10); color: var(--text); }
