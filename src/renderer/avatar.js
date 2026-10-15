@@ -88,7 +88,7 @@ const GROK_SHAPES = {
   tablet: tilt(-10, '<rect x="13" y="25" width="74" height="56" rx="26"/>'),
   wedge: '<polygon points="26,24 82,62 28,84" stroke-width="18" stroke-linejoin="round"/>',
   house: tilt(-15, poly([[50, 20], [80, 44], [80, 80], [20, 80], [20, 44]]).replace('stroke-width="10"', 'stroke-width="14"')),
-  star: tilt(10, `<polygon points="${ring(6, 36, 27).map((q) => q.join(',')).join(' ')}" stroke-width="15" stroke-linejoin="round"/>`),
+  star: tilt(10, `<polygon points="${ring(6, 40, 23).map((q) => q.join(',')).join(' ')}" stroke-width="10" stroke-linejoin="round"/>`),
   pebble: poly([[30, 26], [66, 22], [83, 48], [71, 78], [36, 82], [18, 55]]).replace('stroke-width="10"', 'stroke-width="16"'),
   bean: '<path d="M34 20C58 12 84 28 82 54C80 78 58 90 38 84C20 78 14 60 26 52C34 47 36 40 28 32C24 26 28 21 34 20Z"/>',
   egg: '<path d="M50 14C70 14 82 46 82 62C82 80 68 90 50 90C32 90 18 80 18 62C18 46 30 14 50 14Z"/>',
