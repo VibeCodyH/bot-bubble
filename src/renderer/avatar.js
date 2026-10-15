@@ -49,18 +49,18 @@ function pet(el, url, m) {
 
 // Grok Bot: its app draws the mark in code and has no page to mirror, so this is
 // our own take on it, in the shape and color of the agent you last opened there
-// (main.js reads those). The eyes turn toward the cursor and settle back to rest. Once the cursor has been still a while he does one of the app's
+// (main.js reads those). Like the app, he sits still unless the cursor is over
+// him, and while the agent is working he keeps doing one of the app's
 // moves: a glance around, a spin, a squinting scan, or shrinking to a small dot
 // with dots orbiting him or rings pinging out.
-const GROK = { restMs: 2500, x: 7, y: 6, idleMin: 6000, idleMax: 14000 };
+const GROK = { x: 7, y: 6, moveMin: 1200, moveMax: 3500 };
 let grokIds = 0;
 
-// Body colors, as Grok Bot paints them on a dark background (color -> shade).
+// Body colors, as Grok Bot paints them on a dark background. The lighting
+// filter below does the shading.
 const GROK_COLORS = {
-  black: ['#FFFFFF', '#C2C2C2'], brown: ['#855C36', '#604227'], red: ['#E02135', '#A21826'],
-  orange: ['#FF6700', '#C24E00'], yellow: ['#FF9800', '#C27400'], green: ['#009957', '#008048'],
-  cyan: ['#00A592', '#007769'], blue: ['#0E74E0', '#0C64C1'], violet: ['#804EE0', '#5C39A1'],
-  magenta: ['#E02A88', '#A21E62'], gray: ['#777777', '#555555'],
+  black: '#FFFFFF', brown: '#855C36', red: '#E02135', orange: '#FF6700', yellow: '#FF9800', green: '#009957',
+  cyan: '#00A592', blue: '#0E74E0', violet: '#804EE0', magenta: '#E02A88', gray: '#777777',
 };
 
 // Body shapes in a 100x100 box, centered near (50, 52). A stroke-width on a
@@ -114,25 +114,33 @@ Object.assign(GROK_SHAPES, {
 function grok(el, look) {
   const id = `grok-${++grokIds}`;
   const shape = GROK_SHAPES[look.shape] || GROK_SHAPES.blob;
-  const [light, shade] = GROK_COLORS[look.color] || GROK_COLORS.black;
+  const color = GROK_COLORS[look.color] || GROK_COLORS.black;
   const lift = GROK_EYE_LIFT[look.shape] || 0;
   const eye = (cx, cy, k) => `<g transform="rotate(-25 ${cx} ${cy})"><rect class="lid" x="${cx - 3.6 * k}" y="${cy - 8 * k}" width="${7.2 * k}" height="${16 * k}" rx="${3.6 * k}"/></g>`;
   el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">
     <defs>
-      <linearGradient id="${id}-fill" gradientUnits="userSpaceOnUse" x1="18" y1="16" x2="82" y2="90">
-        <stop offset="0.4" stop-color="${light}"/><stop offset="1" stop-color="${shade}"/>
-      </linearGradient>
-      <radialGradient id="${id}-shine" gradientUnits="userSpaceOnUse" cx="42" cy="36" r="42">
-        <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-      </radialGradient>
+      <filter id="${id}-puff" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+        <!-- A blurred copy of the shape is its height: high in the middle, falling
+             off at the edge. Lighting that from the top left makes it look inflated. -->
+        <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="height"/>
+        <feDiffuseLighting in="height" surfaceScale="6" diffuseConstant="1.2" result="diffuse">
+          <feDistantLight azimuth="225" elevation="56"/>
+        </feDiffuseLighting>
+        <feSpecularLighting in="height" surfaceScale="6" specularConstant="0.6" specularExponent="22" result="specular">
+          <fePointLight x="30" y="18" z="70"/>
+        </feSpecularLighting>
+        <feComposite in="diffuse" in2="SourceAlpha" operator="in" result="diffuseIn"/>
+        <feComposite in="specular" in2="SourceAlpha" operator="in" result="specularIn"/>
+        <feBlend in="SourceGraphic" in2="diffuseIn" mode="multiply" result="lit"/>
+        <feComposite in="lit" in2="specularIn" operator="arithmetic" k2="1" k3="0.7"/>
+      </filter>
       <g id="${id}-shape" transform="translate(50 52) scale(0.88) translate(-50 -52)">${shape}</g>
       <mask id="${id}-mask"><use href="#${id}-shape" fill="#fff" stroke="#fff"/></mask>
     </defs>
     <rect width="100" height="100" fill="#1e1e1e"/>
     <g class="face">
-      <g class="body">
-        <use href="#${id}-shape" fill="url(#${id}-fill)" stroke="url(#${id}-fill)" stroke-width="0"/>
-        <rect width="100" height="100" fill="url(#${id}-shine)" mask="url(#${id}-mask)"/>
+      <g class="body" filter="url(#${id}-puff)">
+        <use href="#${id}-shape" fill="${color}" stroke="${color}" stroke-width="0"/>
       </g>
       <g mask="url(#${id}-mask)"><g class="eyes" fill="#111">${eye(46, 45 - lift, 1)}${eye(59, 41 - lift, 0.9)}</g></g>
     </g>
@@ -212,45 +220,40 @@ function grok(el, look) {
   };
 
   let busy = false;
-  let last = [0, 0];
-  let lastAt = 0;
+  let working = Boolean(look.working);
+  let hover = null; // [nx, ny] while the cursor is over him
   let prev = '';
-  const aim = () => {
-    pose(...last);
-    clearTimeout(entry.rest);
-    entry.rest = setTimeout(() => pose(0, 0), GROK.restMs);
-  };
   const next = () => {
     clearTimeout(entry.idle);
-    entry.idle = setTimeout(perform, GROK.idleMin + Math.random() * (GROK.idleMax - GROK.idleMin));
+    if (working) entry.idle = setTimeout(perform, GROK.moveMin + Math.random() * (GROK.moveMax - GROK.moveMin));
   };
   async function perform() {
-    if (busy || !el.isConnected) return;
+    if (busy || !working || !el.isConnected) return;
     const names = Object.keys(moves).filter((n) => n !== prev);
     prev = names[Math.floor(Math.random() * names.length)];
     busy = true;
     pose(0, 0);
     await moves[prev]();
     busy = false;
-    // Pick the cursor back up if it moved while he was busy.
-    if (Date.now() - lastAt < GROK.restMs) aim();
+    pose(...(hover || [0, 0]));
     next();
   }
 
   const entry = {
     el,
     look(dx, dy) {
-      // Same falloff as the app: the offset over twice the mark's width, clamped,
-      // so the gaze saturates instead of chasing the cursor across the screen.
-      const w = 2 * (el.clientWidth || 56);
-      const clamp = (v) => Math.max(-1, Math.min(1, v));
-      last = [clamp(dx / w), clamp(-dy / w)];
-      lastAt = Date.now();
-      if (!busy) aim();
+      // Like the app, he only follows the cursor while it's over him: from rest
+      // with it at his middle to a full turn with it at his edge.
+      const r = (el.clientWidth || 56) / 2;
+      hover = Math.hypot(dx, dy) <= r ? [dx / r, -dy / r] : null;
+      if (!busy) pose(...(hover || [0, 0]));
+    },
+    setWorking(on) {
+      if (on === working) return;
+      working = on;
       next();
     },
     stop() {
-      clearTimeout(entry.rest);
       clearTimeout(entry.idle);
       for (const t of timers) clearTimeout(t);
     },
@@ -270,7 +273,10 @@ function avatarLook(dx, dy) {
 // eslint-disable-next-line no-unused-vars
 function renderAvatar(box, av) {
   const key = av ? `${av.kind}|${av.url}|${av.shape}|${av.color}` : '';
-  if (box.dataset.avatar === key) return Boolean(av);
+  if (box.dataset.avatar === key) {
+    for (const p of pets) if (p.el.parentNode === box) p.setWorking?.(Boolean(av?.working));
+    return Boolean(av);
+  }
   box.dataset.avatar = key;
   box.querySelector('.av')?.remove();
   for (const p of pets) if (!p.el.isConnected) { p.stop(); pets.delete(p); }
