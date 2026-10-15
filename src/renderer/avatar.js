@@ -71,32 +71,37 @@ const ring = (n, r1, r2, turn = -90) => Array.from({ length: n * (r2 ? 2 : 1) },
   const r = r2 && i % 2 ? r2 : r1;
   return [+(50 + r * Math.cos(a)).toFixed(1), +(52 + r * Math.sin(a)).toFixed(1)];
 });
+const tilt = (deg, shape) => `<g transform="rotate(${deg} 50 52)">${shape}</g>`;
+const bumps = (n, dist, r, core) => `${ring(n, dist).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}<circle cx="50" cy="52" r="${core}"/>`;
+// The first thirteen are the ones Grok Bot's picker offers today, drawn to match
+// it: chubby, and most of them turned a little. The rest are older shapes that
+// existing agents may still have.
 const GROK_SHAPES = {
   blob: '<circle cx="50" cy="52" r="40"/>',
-  pebble: '<ellipse cx="50" cy="54" rx="38" ry="31" transform="rotate(-8 50 54)"/>',
+  cloud: '<circle cx="34" cy="46" r="19"/><circle cx="58" cy="37" r="19"/><circle cx="73" cy="58" r="17"/><circle cx="53" cy="71" r="17"/><circle cx="29" cy="65" r="16"/><circle cx="50" cy="54" r="23"/>',
+  square: tilt(18, '<rect x="20" y="22" width="60" height="60" rx="17"/>'),
+  sparkle: tilt(8, '<path d="M50 22Q55 47 78 52Q55 57 50 82Q45 57 22 52Q45 47 50 22Z" stroke-width="26" stroke-linejoin="round"/>'),
+  clover: tilt(15, bumps(4, 17, 19, 22)),
+  heart: tilt(-40, '<path d="M50 80C26 64 20 48 26 37C32 26 45 28 50 37C55 28 68 26 74 37C80 48 74 64 50 80Z" stroke-width="14" stroke-linejoin="round"/>'),
+  flower: bumps(7, 25, 13, 27),
+  teardrop: tilt(-35, '<path d="M50 14C62 32 79 46 79 62A29 29 0 0 1 21 62C21 46 38 32 50 14Z"/>'),
+  tablet: tilt(-10, '<rect x="13" y="25" width="74" height="56" rx="26"/>'),
+  wedge: '<polygon points="26,24 82,62 28,84" stroke-width="18" stroke-linejoin="round"/>',
+  house: tilt(-15, poly([[50, 20], [80, 44], [80, 80], [20, 80], [20, 44]]).replace('stroke-width="10"', 'stroke-width="14"')),
+  star: tilt(10, `<polygon points="${ring(6, 36, 27).map((q) => q.join(',')).join(' ')}" stroke-width="15" stroke-linejoin="round"/>`),
+  pebble: poly([[30, 26], [66, 22], [83, 48], [71, 78], [36, 82], [18, 55]]).replace('stroke-width="10"', 'stroke-width="16"'),
   bean: '<path d="M34 20C58 12 84 28 82 54C80 78 58 90 38 84C20 78 14 60 26 52C34 47 36 40 28 32C24 26 28 21 34 20Z"/>',
   egg: '<path d="M50 14C70 14 82 46 82 62C82 80 68 90 50 90C32 90 18 80 18 62C18 46 30 14 50 14Z"/>',
   squircle: '<rect x="16" y="18" width="68" height="68" rx="26"/>',
-  tablet: '<rect x="13" y="24" width="74" height="58" rx="26"/>',
   capsule: '<rect x="27" y="12" width="46" height="80" rx="23"/>',
   cylinder: '<path d="M22 28A28 10 0 0 1 78 28V78A28 10 0 0 1 22 78Z"/>',
   hex: poly(ring(6, 34)),
   gem: poly([[27, 33], [40, 21], [60, 21], [73, 33], [50, 83]]),
   crystal: poly([[50, 13], [69, 33], [69, 71], [50, 91], [31, 71], [31, 33]]),
-  wedge: '<polygon points="50,22 82,80 18,80" stroke-width="16" stroke-linejoin="round"/>',
   shield: '<path d="M50 15L79 25C79 56 70 76 50 88C30 76 21 56 21 25Z" stroke-width="8" stroke-linejoin="round"/>',
   dome: '<path d="M17 80V56A33 33 0 0 1 83 56V80Z" stroke-width="8" stroke-linejoin="round"/>',
   arch: '<path d="M17 84V50A33 33 0 0 1 83 50V84H63V56A13 13 0 0 0 37 56V84Z" stroke-width="8" stroke-linejoin="round"/>',
-  cloud: '<circle cx="33" cy="58" r="19"/><circle cx="53" cy="44" r="24"/><circle cx="70" cy="60" r="18"/><rect x="30" y="56" width="42" height="22" rx="11"/>',
-  teardrop: '<path d="M50 12C62 32 80 46 80 62A30 30 0 0 1 20 62C20 46 38 32 50 12Z"/>',
   leaf: '<path d="M50 10C78 30 82 64 50 92C18 64 22 30 50 10Z" transform="rotate(28 50 51)"/>',
-  square: '<rect x="18" y="20" width="64" height="64" rx="8"/>',
-  sparkle: '<path d="M50 10Q58 44 90 52Q58 60 50 94Q42 60 10 52Q42 44 50 10Z" stroke-width="6" stroke-linejoin="round"/>',
-  clover: '<circle cx="35" cy="37" r="17"/><circle cx="65" cy="37" r="17"/><circle cx="35" cy="67" r="17"/><circle cx="65" cy="67" r="17"/><circle cx="50" cy="52" r="16"/>',
-  flower: `${ring(6, 21).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="15"/>`).join('')}<circle cx="50" cy="52" r="22"/>`,
-  heart: '<path d="M50 86C18 64 12 44 22 30C32 17 46 22 50 32C54 22 68 17 78 30C88 44 82 64 50 86Z" stroke-width="8" stroke-linejoin="round"/>',
-  house: poly([[50, 18], [83, 45], [83, 84], [17, 84], [17, 45]]),
-  star: '<polygon points="' + ring(6, 40, 25).map((q) => q.join(',')).join(' ') + '" stroke-width="8" stroke-linejoin="round"/>',
 };
 // The arch's eyes sit above its opening.
 const GROK_EYE_LIFT = { arch: 8, horseshoe: 8 };
