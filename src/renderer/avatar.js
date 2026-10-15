@@ -55,12 +55,12 @@ function pet(el, url, m) {
 const GROK = { restMs: 2500, x: 7, y: 6, idleMin: 6000, idleMax: 14000 };
 let grokIds = 0;
 
-// Body colors, as Grok Bot paints them on a dark background (light -> shade).
+// Body colors, as Grok Bot paints them on a dark background (color -> shade).
 const GROK_COLORS = {
-  black: ['#FFFFFF', '#C2C2C2'], brown: ['#A27952', '#604227'], red: ['#FF3E51', '#A21826'],
-  orange: ['#FF781C', '#C24E00'], yellow: ['#FFA31C', '#C27400'], green: ['#00C972', '#008048'],
-  cyan: ['#1CC3B0', '#007769'], blue: ['#2A92FE', '#0C64C1'], violet: ['#9159FE', '#5C39A1'],
-  magenta: ['#FF47A6', '#A21E62'], gray: ['#B7B7B7', '#777777'],
+  black: ['#FFFFFF', '#C2C2C2'], brown: ['#855C36', '#604227'], red: ['#E02135', '#A21826'],
+  orange: ['#FF6700', '#C24E00'], yellow: ['#FF9800', '#C27400'], green: ['#009957', '#008048'],
+  cyan: ['#00A592', '#007769'], blue: ['#0E74E0', '#0C64C1'], violet: ['#804EE0', '#5C39A1'],
+  magenta: ['#E02A88', '#A21E62'], gray: ['#777777', '#555555'],
 };
 
 // Body shapes in a 100x100 box, centered near (50, 52). A stroke-width on a
@@ -77,7 +77,7 @@ const GROK_SHAPES = {
   bean: '<path d="M34 20C58 12 84 28 82 54C80 78 58 90 38 84C20 78 14 60 26 52C34 47 36 40 28 32C24 26 28 21 34 20Z"/>',
   egg: '<path d="M50 14C70 14 82 46 82 62C82 80 68 90 50 90C32 90 18 80 18 62C18 46 30 14 50 14Z"/>',
   squircle: '<rect x="16" y="18" width="68" height="68" rx="26"/>',
-  tablet: '<rect x="24" y="14" width="52" height="76" rx="20"/>',
+  tablet: '<rect x="13" y="24" width="74" height="58" rx="26"/>',
   capsule: '<rect x="27" y="12" width="46" height="80" rx="23"/>',
   cylinder: '<path d="M22 28A28 10 0 0 1 78 28V78A28 10 0 0 1 22 78Z"/>',
   hex: poly(ring(6, 34)),
@@ -99,7 +99,7 @@ const GROK_SHAPES = {
   star: '<polygon points="' + ring(6, 40, 25).map((q) => q.join(',')).join(' ') + '" stroke-width="8" stroke-linejoin="round"/>',
 };
 // The arch's eyes sit above its opening.
-const GROK_EYE_LIFT = { arch: 10, horseshoe: 10 };
+const GROK_EYE_LIFT = { arch: 8, horseshoe: 8 };
 // Older or internal names the app also uses.
 Object.assign(GROK_SHAPES, {
   sphere: GROK_SHAPES.blob, heartChubby: GROK_SHAPES.heart, starFlower: GROK_SHAPES.flower,
@@ -111,11 +111,11 @@ function grok(el, look) {
   const shape = GROK_SHAPES[look.shape] || GROK_SHAPES.blob;
   const [light, shade] = GROK_COLORS[look.color] || GROK_COLORS.black;
   const lift = GROK_EYE_LIFT[look.shape] || 0;
-  const eye = (cx, cy, k) => `<g transform="rotate(-30 ${cx} ${cy})"><rect class="lid" x="${cx - 4.8 * k}" y="${cy - 11 * k}" width="${9.6 * k}" height="${22 * k}" rx="${4.8 * k}"/></g>`;
+  const eye = (cx, cy, k) => `<g transform="rotate(-25 ${cx} ${cy})"><rect class="lid" x="${cx - 3.6 * k}" y="${cy - 8 * k}" width="${7.2 * k}" height="${16 * k}" rx="${3.6 * k}"/></g>`;
   el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%">
     <defs>
       <linearGradient id="${id}-fill" gradientUnits="userSpaceOnUse" x1="18" y1="16" x2="82" y2="90">
-        <stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${shade}"/>
+        <stop offset="0.4" stop-color="${light}"/><stop offset="1" stop-color="${shade}"/>
       </linearGradient>
       <radialGradient id="${id}-shine" gradientUnits="userSpaceOnUse" cx="42" cy="36" r="42">
         <stop offset="0" stop-color="#fff" stop-opacity="0.5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
@@ -129,7 +129,7 @@ function grok(el, look) {
         <use href="#${id}-shape" fill="url(#${id}-fill)" stroke="url(#${id}-fill)" stroke-width="0"/>
         <rect width="100" height="100" fill="url(#${id}-shine)" mask="url(#${id}-mask)"/>
       </g>
-      <g mask="url(#${id}-mask)"><g class="eyes" fill="#111">${eye(43, 54 - lift, 1)}${eye(62, 47 - lift, 0.88)}</g></g>
+      <g mask="url(#${id}-mask)"><g class="eyes" fill="#111">${eye(46, 45 - lift, 1)}${eye(59, 41 - lift, 0.9)}</g></g>
     </g>
     <g class="fx" fill="#e6e6e6"></g>
   </svg>`;
