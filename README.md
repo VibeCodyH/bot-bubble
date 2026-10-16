@@ -22,16 +22,7 @@ It works with the bot products themselves, not their APIs, so it runs on the sub
 
 ## Install
 
-**Prebuilt AppImage (Linux x86_64):** coming soon for $2.99, or pay what you want from $1.99. It's the same code as this repo, with no license key or DRM. Buying the build is a way to support the project if you'd rather not build it yourself.
-
-```bash
-chmod +x Bot-Bubble-*.AppImage
-./Bot-Bubble-*.AppImage
-```
-
-If your distro has no FUSE, run it with `--appimage-extract-and-run`.
-
-**From source (free):** needs Node.js and npm.
+**From source:** needs Node.js and npm.
 
 ```bash
 git clone https://github.com/VibeCodyH/bot-bubble.git
