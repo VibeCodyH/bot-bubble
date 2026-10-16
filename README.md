@@ -16,8 +16,8 @@ It works with the bot products themselves, not their APIs, so it runs on the sub
 
 | Type | What the bubble shows | Examples |
 |------|-----------------------|----------|
-| `web` | The bot's own web app, signed in as you, in a persistent session | Dots, Muse |
-| `app` | The vendor's own desktop app window, parked over the bubble (for bots with no web client) | Grok Bot |
+| `web` | The bot's own web app, signed in as you, in a persistent session | Dots, Muse, Grok Bot |
+| `app` | The vendor's own desktop app window, parked over the bubble | Grok Bot (desktop app) |
 | `cli` | A chat view over an agent CLI on your subscription login | Claude Code, Codex, Grok Build, Muse Code |
 
 ## Install
@@ -63,8 +63,7 @@ Everything is stored in `~/.config/bot-bubble/config.json` if you'd rather edit 
   "providers": [
     { "id": "dots", "label": "Dots", "type": "web", "url": "https://chatgpt.com/dots" },
     { "id": "muse", "label": "Muse", "type": "web", "url": "https://muse.ai" },
-    { "id": "grokbot", "label": "Grok Bot", "type": "app", "command": ["grok-bot"],
-      "avatar": ["/opt/Grok Bot/resources/icon.png"] },
+    { "id": "grokbot", "label": "Grok Bot", "type": "web", "url": "https://grok.com/bot", "loadWidth": 768 },
     { "id": "claude", "label": "Claude Code", "type": "cli", "agent": "claude" },
     { "id": "codex", "label": "Codex", "type": "cli", "agent": "codex" },
     { "id": "grok", "label": "Grok Build", "type": "cli", "agent": "grok" },
@@ -73,13 +72,13 @@ Everything is stored in `~/.config/bot-bubble/config.json` if you'd rather edit 
 }
 ```
 
-`avatar` is optional and takes a list of image paths. The first one that exists is used. An `app` bot can set `"park": false` to get an Open button instead of having its window parked.
+`avatar` is optional and takes a list of image paths. The first one that exists is used. A web bot whose page stays blank in a narrow window can set `loadWidth` to the width it needs. The page then loads as if the window were that wide, and gets the real width once it has loaded. In real-browser mode this needs Brave or Chromium. An `app` bot can set `"park": false` to get an Open button instead of having its window parked.
 
 ## How it works
 
 - **Web bots** each get their own persistent Chromium session, so you sign in once per bot. They stay loaded in the background so a reply can light the badge before you open them. The badge comes from the page's own web notifications or from a reply streaming into a hidden page. Nothing is site-specific. Microphone and notification permissions are granted only to the bot's own site.
 - **Real-browser mode** (per web bot, in Settings) is for bots whose sign-in refuses embedded browsers. Google sign-in does this on purpose, so an account that only signs in with Google can't log in inside the bubble. The bot then runs in a real Brave, Chromium or Chrome app window with its own profile. With Brave or Chromium, a small extension in that private profile reports replies and the bot's avatar back to Bot Bubble over a token-protected loopback connection, so unread badges and avatars still work. Branded Chrome refuses command-line extensions, so it's the fallback: sign-in works, no extras.
-- **Desktop apps** (`app` bots, like Grok Bot) run as themselves. Bot Bubble starts the app if it isn't running, finds its main window by executable, and parks it over the bubble the same way as real-browser mode. It never closes the app: when you quit Bot Bubble or turn parking off, the window goes back to a normal workspace. Parking needs Hyprland for now; elsewhere the tab shows an Open button.
+- **Desktop apps** (`app` bots, like the Grok Bot desktop app) run as themselves. Bot Bubble starts the app if it isn't running, finds its main window by executable, and parks it over the bubble the same way as real-browser mode. It never closes the app: when you quit Bot Bubble or turn parking off, the window goes back to a normal workspace. Parking needs Hyprland for now; elsewhere the tab shows an Open button.
 - **CLI agents** run headless in an empty folder under `~/.local/share/bot-bubble/workspace/`, and none of them can write. Claude Code and Grok Build get no tools at all. Codex runs in its read-only sandbox and Muse Code with writes disabled, so those two can still read files on disk. Images are sent as images. Other text files are inlined up to 100 KB.
 - **Hyprland:** Wayland doesn't let a window position or pin itself, so on Hyprland Bot Bubble asks the compositor directly over its IPC socket. It registers a runtime window rule (float, pin, no border, no blur) and moves itself with dispatchers. Nothing is written to your Hyprland config, and the rule disappears on a Hyprland reload.
 
@@ -103,7 +102,7 @@ Real-browser mode looks for Brave, Chromium or Chrome on your `PATH` on Linux, a
 
 v0.1. Dictation and voice come from each web bot's own input bar. CLI agents have none yet.
 
-Grok Bot has no web client or API, so its tab shows the Grok Bot desktop app's own window. There's no unread badge or avatar for it yet.
+Grok Bot opens on grok.com, which has no address for your Bot, so the bubble lands on Grok with your Bots in the sidebar. To open one directly, sign in first, then paste its address (`https://grok.com/bot/...`) into the bot's Address in Settings. Signed out, a Bot's address shows Page not found. The dot draws the Bot's avatar itself, with its shape and color taken from the Grok Bot desktop app when it's installed. The **Grok Bot (desktop app)** preset parks the desktop app instead. Use it if you'd rather run the desktop app. It has no unread badge yet.
 
 ## Support
 

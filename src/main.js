@@ -49,11 +49,11 @@ let settingsWin = null;
 let bridge = null; // loopback endpoint for real-browser bots' extension
 
 // Sandboxed preloads can't require local files, so the web preload is built
-// from page-watch.js + web-preload.js at startup.
+// from page-watch.js + wide-load.js + web-preload.js at startup.
 function webPreload() {
   const file = path.join(dataDir, 'gen', 'web-preload.js');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, ['page-watch.js', 'web-preload.js'].map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8')).join('\n'));
+  fs.writeFileSync(file, ['page-watch.js', 'wide-load.js', 'web-preload.js'].map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8')).join('\n'));
   return file;
 }
 let webPreloadFile = null;
@@ -103,12 +103,19 @@ function saveBotAvatar(id, { kind, data, url, meta }) {
 // Grok Bot's app draws its mark in code, so there's nothing to mirror; the
 // renderer draws its own version (avatar.js).
 const isGrokBot = (p) => p.type === 'app' && path.basename(p.command?.[0] || '') === 'grok-bot';
+// A Grok Bot on grok.com: /bot/<agent id>, or '' for /bot (whichever Bot you open).
+// Its page has no avatar image to mirror, only your profile photo.
+const grokWebAgent = (p) => {
+  const m = p.type === 'web' && (p.url || '').match(/^https:\/\/grok\.com\/bot(?:\/([\w-]+))?\/?$/i);
+  return m ? m[1] || '' : null;
+};
+const drawsGrok = (p) => isGrokBot(p) || grokWebAgent(p) !== null;
 
 // Each Grok Bot agent picks a body shape and color. The app caches its roster
 // and the last agent you opened under its own data folder, one file per slice,
-// named in base32. We read just the shape and color of that agent.
+// named in base32. We read just the shape and color of each agent.
 const grokStore = path.join(app.getPath('appData'), 'Grok Bot', 'sand-client-persistence');
-let grokLook = null; // { shape, color, agent }
+let grokLook = null; // { shape, color, agent, looks: { [agent id]: { shape, color } } }
 
 function base32(s) {
   const abc = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -145,8 +152,9 @@ function readGrokLook() {
     const rows = JSON.parse(fs.readFileSync(s.roster, 'utf8')).value?.rows || [];
     let id = null;
     try { id = JSON.parse(fs.readFileSync(s.agent, 'utf8')).value?.agentId; } catch { /* no agent opened yet */ }
+    const look = (r) => ({ shape: String(r.avatarShape || ''), color: String(r.avatarColor || '') });
     const row = rows.find((r) => r.id === id) || rows[0];
-    return row ? { shape: String(row.avatarShape || ''), color: String(row.avatarColor || ''), agent: String(row.id) } : null;
+    return row ? { ...look(row), agent: String(row.id), looks: Object.fromEntries(rows.map((r) => [String(r.id), look(r)])) } : null;
   } catch { return null; }
 }
 
@@ -234,6 +242,12 @@ function watchGrokRoster() {
 function avatarFor(p) {
   const mode = p.avatarMode || (p.type === 'web' || isGrokBot(p) ? 'bot' : 'custom');
   if (mode === 'bot' && isGrokBot(p)) return { kind: 'grok', shape: grokLook?.shape, color: grokLook?.color, working: grokWorking };
+  // Shape and color come from the desktop app's cache when it's installed.
+  if (mode === 'bot' && drawsGrok(p)) {
+    const id = grokWebAgent(p);
+    const look = id ? grokLook?.looks[id] : grokLook;
+    return { kind: 'grok', shape: look?.shape, color: look?.color, working: false };
+  }
   if (mode === 'bot' && botAvatars.has(p.id)) return botAvatars.get(p.id);
   const url = avatarUrl(p);
   return url ? { kind: 'img', url } : null;
@@ -394,6 +408,7 @@ function createView(p) {
     webPreferences: {
       partition: `persist:${p.id}`,
       preload: (webPreloadFile ||= webPreload()),
+      additionalArguments: Number(p.loadWidth) > 0 ? [`--bot-bubble-load-width=${Number(p.loadWidth)}`] : [],
       backgroundThrottling: false, // keep watching for replies while hidden
     },
   });
@@ -654,7 +669,7 @@ function settingsPayload() {
     presets,
     avatars: Object.fromEntries(cfg.providers.map((p) => [p.id, avatarFor(p)])),
     botAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, botAvatars.has(p.id)])),
-    drawnAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, isGrokBot(p)])),
+    drawnAvatars: Object.fromEntries(cfg.providers.map((p) => [p.id, drawsGrok(p)])),
     locked: state.locked,
     autostart: autostartOn(),
     version: app.getVersion(),
