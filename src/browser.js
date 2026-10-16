@@ -50,10 +50,13 @@ const windows = new Map(); // provider id -> { addr, pid, shown }
 // One profile per browser: Brave and Chrome can't share one.
 const profileDir = (dataDir, id, browser) => path.join(dataDir, 'browser', `${id}-${browser}`);
 
-// Our extension for this bot: page-watch.js + glue, with the bridge details baked in.
+// Our extension for this bot: page-watch.js + glue, with the bridge details baked in,
+// plus wide-load.js for a bot with a `loadWidth`.
 function writeExtension(dataDir, p, bridge) {
   const dir = path.join(dataDir, 'browser-ext', p.id);
   const src = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+  const matches = [`${new URL(p.url).origin}/*`];
+  const width = Number(p.loadWidth) > 0 ? Number(p.loadWidth) : 0;
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
     manifest_version: 3,
@@ -62,9 +65,14 @@ function writeExtension(dataDir, p, bridge) {
     description: 'Tells Bot Bubble when this bot replies and which avatar it uses.',
     host_permissions: ['http://127.0.0.1/*'],
     background: { service_worker: 'background.js' },
-    content_scripts: [{ matches: [`${new URL(p.url).origin}/*`], js: ['content.js'], run_at: 'document_idle' }],
+    content_scripts: [
+      { matches, js: ['content.js'], run_at: 'document_idle' },
+      // In the page's own world, before its scripts. It gets nothing else of ours.
+      ...(width ? [{ matches, js: ['wide-load.js'], run_at: 'document_start', world: 'MAIN' }] : []),
+    ],
   }, null, 2));
   fs.writeFileSync(path.join(dir, 'content.js'), `${src('page-watch.js')}\n${src('ext/content.js')}`);
+  if (width) fs.writeFileSync(path.join(dir, 'wide-load.js'), `${src('wide-load.js')}\nbotBubbleWideLoad(${width});`);
   fs.writeFileSync(path.join(dir, 'background.js'),
     `const BRIDGE = ${JSON.stringify({ port: bridge.port, token: bridge.token, bot: p.id })};\n${src('ext/background.js')}`, { mode: 0o600 });
   fs.chmodSync(path.join(dir, 'background.js'), 0o600); // holds the bridge token

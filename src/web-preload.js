@@ -1,5 +1,6 @@
-// Preload for each in-app web bot. main.js prepends page-watch.js to this file
-// (sandboxed preloads can't require local modules), so botBubbleWatch is in scope.
+// Preload for each in-app web bot. main.js prepends page-watch.js and wide-load.js
+// to this file (sandboxed preloads can't require local modules), so botBubbleWatch
+// and botBubbleWideLoad are in scope.
 const { contextBridge, ipcRenderer } = require('electron');
 
 const MARK = '__botBubbleNotify';
@@ -26,3 +27,7 @@ contextBridge.executeInMainWorld({
   },
   args: [MARK],
 });
+
+// A bot with a `loadWidth` (passed by main.js) loads as if its window were that wide.
+const loadWidth = Number((process.argv.find((a) => a.startsWith('--bot-bubble-load-width=')) || '').split('=')[1]);
+if (loadWidth > 0) contextBridge.executeInMainWorld({ func: botBubbleWideLoad, args: [loadWidth] });

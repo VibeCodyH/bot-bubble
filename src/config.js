@@ -11,15 +11,14 @@ const configPath = path.join(configDir, 'config.json');
 const statePath = path.join(dataDir, 'state.json');
 
 // type "web": the bot's own web app in a persistent, logged-in view.
-// type "app": no web client; clicking the dot opens the vendor's desktop app.
+// type "app": the vendor's desktop app, parked over the bubble.
 // type "cli": an agent CLI on the user's subscription login, rendered in our own chat UI.
 const DEFAULT_CONFIG = {
   active: 'dots',
   providers: [
     { id: 'dots', label: 'Dots', type: 'web', url: 'https://chatgpt.com/dots' },
     { id: 'muse', label: 'Muse', type: 'web', url: 'https://muse.ai' },
-    { id: 'grokbot', label: 'Grok Bot', type: 'app', command: ['grok-bot'],
-      avatar: ['/opt/Grok Bot/resources/icon.png'] },
+    { id: 'grokbot', label: 'Grok Bot', type: 'web', url: 'https://grok.com/bot', loadWidth: 768 },
     { id: 'claude', label: 'Claude Code', type: 'cli', agent: 'claude' },
   ],
   // keepLoaded: web bots load at startup and stay loaded so a reply can light the badge.

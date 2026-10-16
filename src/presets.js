@@ -2,7 +2,10 @@
 module.exports = [
   { group: 'Bots', label: 'Dots', type: 'web', url: 'https://chatgpt.com/dots', note: 'OpenAI · ChatGPT Pro or Business Premium' },
   { group: 'Bots', label: 'Muse', type: 'web', url: 'https://muse.ai', note: 'Meta' },
-  { group: 'Bots', label: 'Grok Bot', type: 'app', command: ['grok-bot'], avatar: ['/opt/Grok Bot/resources/icon.png'], note: 'xAI · the desktop app, parked in the bubble' },
+  // grok.com has no address for "your Bot", so this lands on Grok with your Bots in the sidebar.
+  // Its Bot pages stay blank when they load narrower than 768px.
+  { group: 'Bots', label: 'Grok Bot', type: 'web', url: 'https://grok.com/bot', loadWidth: 768, note: 'xAI · on grok.com' },
+  { group: 'Bots', label: 'Grok Bot (desktop app)', type: 'app', command: ['grok-bot'], avatar: ['/opt/Grok Bot/resources/icon.png'], note: 'xAI · the desktop app, parked in the bubble' },
   { group: 'Chat', label: 'ChatGPT', type: 'web', url: 'https://chatgpt.com', note: 'OpenAI' },
   { group: 'Chat', label: 'Claude', type: 'web', url: 'https://claude.ai', note: 'Anthropic' },
   { group: 'Chat', label: 'Grok', type: 'web', url: 'https://grok.com', note: 'xAI' },
