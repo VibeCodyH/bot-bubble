@@ -827,14 +827,14 @@ async function boot() {
   const center = state.pos && { x: state.pos.x + DOT / 2, y: state.pos.y + DOT / 2 };
   if (!center || !(await monitors()).some((b) => inside(center, b))) state.pos = await defaultPos();
   if (hypr.available) {
-    // Runtime rule, nothing written to the user's config. Gone after a Hyprland reload.
+    // Runtime rule, nothing written to the user's config. hypr.rule() puts it back after a Hyprland reload.
     const rule = `hl.window_rule({ name = "bot-bubble", match = { title = "^${TITLE}$" }, float = true, pin = true, tag = "+bot-bubble", `
       + `border_size = 0, rounding = 0, no_shadow = true, no_anim = true, no_blur = true, no_initial_focus = true, `
       + `size = "${DOT} ${DOT}", move = "${state.pos.x} ${state.pos.y}" })`;
     const settingsRule = `hl.window_rule({ name = "bot-bubble-settings", match = { title = "^${SETTINGS_TITLE}$" }, `
       + `float = true, center = true, size = "860 600" })`;
-    for (const r of [rule, settingsRule]) {
-      const out = await hypr.eval(r);
+    for (const [name, r] of [['bot-bubble', rule], ['bot-bubble-settings', settingsRule]]) {
+      const out = await hypr.rule(name, r);
       if (out.trim() !== 'ok') console.error(`hyprland rule: ${out.trim()}`);
     }
   }

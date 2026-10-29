@@ -30,6 +30,53 @@ async function dispatch(fn, args) {
   if (out.trim() !== 'ok') throw new Error(`hyprland ${fn}: ${out.trim()}`);
 }
 
+// Runtime rules are dropped whenever Hyprland reloads its config (a `hyprctl reload`,
+// or just saving the config file), and every window falls back to the default border
+// and shadow. Keep each rule by name and replay them all when the event socket reports
+// a reload. Replaying is safe: a rule's size/move only apply when a window opens.
+const rules = new Map();
+let events = null;
+let retryMs = 1000;
+
+function replayRules() {
+  for (const [name, code] of rules) {
+    request(`eval ${code}`).then(
+      (out) => { if (out.trim() !== 'ok') console.error(`hyprland rule ${name}: ${out.trim()}`); },
+      (e) => console.error(`hyprland rule ${name}: ${e.message}`),
+    );
+  }
+}
+
+function watchReloads() {
+  if (events) return;
+  events = net.connect(path.join(path.dirname(sock), '.socket2.sock'), () => {
+    retryMs = 1000;
+    // A reload may have happened while nobody was listening (before the first
+    // connect, or after a drop). Replaying is idempotent, so just do it.
+    replayRules();
+  });
+  events.unref();
+  events.setEncoding('utf8');
+  let buf = '';
+  events.on('data', (d) => {
+    const lines = (buf + d).split('\n');
+    buf = lines.pop();
+    if (lines.some((l) => l.startsWith('configreloaded>>'))) replayRules();
+  });
+  events.on('error', (e) => console.error(`hyprland events: ${e.message}`));
+  events.on('close', () => {
+    events = null;
+    setTimeout(watchReloads, retryMs).unref();
+    retryMs = Math.min(retryMs * 2, 30000);
+  });
+}
+
+function rule(name, code) {
+  rules.set(name, code);
+  watchReloads();
+  return request(`eval ${code}`);
+}
+
 module.exports = {
   get available() { return available; },
   // Older Hyprland has no Lua dispatchers; it gets the plain Electron path instead.
@@ -43,6 +90,7 @@ module.exports = {
   },
   json,
   dispatch,
+  rule,
   eval: (code) => request(`eval ${code}`),
   async findWindow(pid, title) {
     const clients = await json('clients');

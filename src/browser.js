@@ -130,7 +130,8 @@ async function show(p, bounds, dataDir, bridge) {
       // Float it from the first frame so it never flashes in as a tiled window.
       const cls = `^[a-z-]+-${escape(new URL(p.url).host)}_.*$`;
       // JSON.stringify doubles the regex backslashes, which is what a Lua string needs.
-      const out = await hypr.eval(`hl.window_rule({ name = ${JSON.stringify(`bot-bubble-browser-${p.id}`)}, match = { class = ${JSON.stringify(cls)} }, float = true, tag = "+bot-bubble", `
+      const name = `bot-bubble-browser-${p.id}`;
+      const out = await hypr.rule(name, `hl.window_rule({ name = ${JSON.stringify(name)}, match = { class = ${JSON.stringify(cls)} }, float = true, tag = "+bot-bubble", `
         + `border_size = 0, rounding = 14, no_shadow = true, size = "${bounds.width} ${bounds.height}", move = "${bounds.x} ${bounds.y}" })`);
       if (out.trim() !== 'ok') console.error(`hyprland rule: ${out.trim()}`);
     }
