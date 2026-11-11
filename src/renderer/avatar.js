@@ -272,9 +272,12 @@ function avatarLook(dx, dy) {
 }
 // eslint-disable-next-line no-unused-vars
 function renderAvatar(box, av) {
-  const key = av ? `${av.kind}|${av.url}|${av.shape}|${av.color}` : '';
+  // A live face's frames swap into the same <img>, so it doesn't flicker.
+  const key = av ? `${av.kind}|${av.kind === 'frame' ? '' : av.url}|${av.shape}|${av.color}` : '';
   if (box.dataset.avatar === key) {
     for (const p of pets) if (p.el.parentNode === box) p.setWorking?.(Boolean(av?.working));
+    const img = av?.kind === 'frame' && box.querySelector('img.av');
+    if (img && img.src !== av.url) img.src = av.url;
     return Boolean(av);
   }
   box.dataset.avatar = key;
