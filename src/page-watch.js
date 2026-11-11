@@ -12,6 +12,9 @@
 //                             sheet. Sent with its grid (from background-size, e.g.
 //                             800% 1100% = 8x11 frames) and any CSS animation
 //                             keyframes, so the dot can animate its own copy.
+//                             Or a face: an avatar-sized canvas marked role="img"
+//                             that the page draws in script, sent as a PNG frame
+//                             each time its drawing changes, so the dot plays along.
 // eslint-disable-next-line no-unused-vars
 function botBubbleWatch(report) {
   const GROWTH = 40;     // chars of new text that count as a reply, not a timestamp tick
@@ -27,6 +30,8 @@ function botBubbleWatch(report) {
   let confirmTimer = null;
   let warm = false;
   let avatarSrc = '';
+  let faceTimer = null;
+  let sawFace = false; // a page with a face never falls back to its round images
 
   const textLength = () => (document.body ? document.body.innerText.length : 0);
 
@@ -130,7 +135,36 @@ function botBubbleWatch(report) {
     } catch { /* sheet not readable from here */ }
   }
 
+  // A face drawn on a canvas (Claude Duet's): checked before round images, since
+  // those are usually the user's own photo or a badge next to it.
+  function findFace() {
+    for (const c of document.querySelectorAll('canvas')) {
+      const r = c.getBoundingClientRect();
+      if (r.width < 28 || r.width > 128 || Math.abs(r.width - r.height) > 4) continue;
+      if (c.closest('[role="img"]')) return c;
+    }
+    return null;
+  }
+
+  // Polls while a face is on the page; reports only frames that differ.
+  function watchFace(canvas) {
+    if (faceTimer) return;
+    sawFace = true;
+    let last = '';
+    faceTimer = setInterval(() => {
+      if (!canvas.isConnected) { clearInterval(faceTimer); faceTimer = null; return; }
+      let url;
+      try { url = canvas.toDataURL('image/png'); } catch { return; } // tainted canvas
+      if (url === last) return;
+      last = url;
+      report('avatar', { kind: 'frame', url });
+    }, 100);
+  }
+
   async function scanAvatar() {
+    const face = findFace();
+    if (face) { watchFace(face); return; }
+    if (sawFace) return;
     const el = findAvatar();
     const src = el && (el.currentSrc || el.src);
     if (!el) { await scanSprite(); return; }

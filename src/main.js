@@ -86,9 +86,29 @@ for (const f of fs.existsSync(avatarDir) ? fs.readdirSync(avatarDir) : []) {
   botAvatars.set(m[1], { kind: m[2], url: pathToFileURL(path.join(avatarDir, f)).href, meta });
 }
 
-const AVATAR_KINDS = new Set(['video', 'img', 'sprite']);
+const AVATAR_KINDS = new Set(['video', 'img', 'sprite', 'frame']);
+const MAX_FRAME = 512 * 1024;
+const frameSaves = new Map();
 function saveBotAvatar(id, { kind, data, url, meta }) {
   if (!AVATAR_KINDS.has(kind)) return;
+  // A face the page draws live: keep the latest frame in memory, and on disk now and then
+  // as a still so the dot has a face at startup.
+  if (kind === 'frame') {
+    if (typeof url !== 'string' || url.length > MAX_FRAME || !url.startsWith('data:image/png;base64,')) return;
+    botAvatars.set(id, { kind, url });
+    if (!frameSaves.has(id)) {
+      frameSaves.set(id, setTimeout(() => {
+        frameSaves.delete(id);
+        const buf = Buffer.from(botAvatars.get(id)?.url?.split(',')[1] || '', 'base64');
+        if (!buf.length) return;
+        const name = `${id}.img.${crypto.createHash('sha1').update(buf).digest('hex').slice(0, 12)}`;
+        fs.mkdirSync(avatarDir, { recursive: true });
+        for (const f of fs.readdirSync(avatarDir)) if (f.startsWith(`${id}.`) && f !== name) fs.rmSync(path.join(avatarDir, f), { force: true });
+        fs.writeFileSync(path.join(avatarDir, name), buf);
+      }, 5000));
+    }
+    return;
+  }
   if (url) { if (/^https:\/\//.test(url) && kind !== 'sprite') botAvatars.set(id, { kind, url }); return; }
   if (!data || (kind === 'sprite' && !meta)) return;
   const buf = Buffer.from(data);
@@ -457,14 +477,29 @@ function syncViews(l = layout()) {
   }
 }
 
+// A live face sends up to 10 frames a second. Those go straight to the dot's image:
+// a full broadcast rebuilds the tab bar each time, which eats clicks on the tabs.
+function avatarChanged(id, before) {
+  const now = botAvatars.get(id);
+  if (now?.url === before?.url) return;
+  // Only while the bubble is closed: repainting the dot that often beside an open bot
+  // looks to be what leaves its page drawn blank until it's scrolled.
+  if (now?.kind === 'frame' && before?.kind === 'frame') {
+    if (!state.expanded && dotProvider().id === id && win && !win.isDestroyed()) win.webContents.send('frame', now.url);
+    return;
+  }
+  broadcast();
+  settingsWin?.webContents.send('settings:avatars');
+}
+
 ipcMain.on('web:avatar', (e, a) => {
   for (const [id, { view }] of views) {
     if (view.webContents !== e.sender) continue;
     // A sign-in page's round profile photo isn't the bot's face.
     if (!sameSite(view.webContents.getURL(), provider(id)?.url)) continue;
-    const before = botAvatars.get(id)?.url;
+    const before = botAvatars.get(id);
     saveBotAvatar(id, a);
-    if (botAvatars.get(id)?.url !== before) { broadcast(); settingsWin?.webContents.send('settings:avatars'); }
+    avatarChanged(id, before);
   }
 });
 
@@ -816,9 +851,9 @@ async function boot() {
     activity: (id) => { if (inBrowser(provider(id))) markUnread(id); },
     avatar: (id, a) => {
       if (!inBrowser(provider(id))) return;
-      const before = botAvatars.get(id)?.url;
-      saveBotAvatar(id, a.b64 ? { kind: a.kind, meta: a.meta, data: Buffer.from(a.b64, 'base64') } : { kind: 'img', url: a.url });
-      if (botAvatars.get(id)?.url !== before) { broadcast(); settingsWin?.webContents.send('settings:avatars'); }
+      const before = botAvatars.get(id);
+      saveBotAvatar(id, a.b64 ? { kind: a.kind, meta: a.meta, data: Buffer.from(a.b64, 'base64') } : { kind: a.kind === 'frame' ? 'frame' : 'img', url: a.url });
+      avatarChanged(id, before);
     },
   });
   watchGrokRoster();
