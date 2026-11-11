@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('dot', {
   getState: () => ipcRenderer.invoke('state:get'),
   onState: (cb) => ipcRenderer.on('state', (_e, s) => cb(s)),
   onLook: (cb) => ipcRenderer.on('look', (_e, l) => cb(l)),
+  onFrame: (cb) => ipcRenderer.on('frame', (_e, url) => cb(url)),
   toggle: () => ipcRenderer.invoke('win:toggle'),
   collapse: () => ipcRenderer.invoke('win:collapse'),
   setLocked: (locked) => ipcRenderer.invoke('win:lock', locked),

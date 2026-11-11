@@ -230,3 +230,8 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape') api.collapse
 api.getState().then(render);
 api.onState(render);
 api.onLook(({ dx, dy }) => avatarLook(dx, dy));
+// A live face's next frame (main sends these only for the dot's own bot).
+api.onFrame((url) => {
+  const img = $('dot').dataset.avatar?.startsWith('frame|') && $('dot').querySelector('img.av');
+  if (img) img.src = url;
+});

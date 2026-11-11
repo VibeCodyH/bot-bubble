@@ -477,12 +477,19 @@ function syncViews(l = layout()) {
   }
 }
 
-// A live face sends a new frame every few hundred ms; Settings only needs to hear when it first appears.
+// A live face sends up to 10 frames a second. Those go straight to the dot's image:
+// a full broadcast rebuilds the tab bar each time, which eats clicks on the tabs.
 function avatarChanged(id, before) {
   const now = botAvatars.get(id);
   if (now?.url === before?.url) return;
+  // Only while the bubble is closed: repainting the dot that often beside an open bot
+  // looks to be what leaves its page drawn blank until it's scrolled.
+  if (now?.kind === 'frame' && before?.kind === 'frame') {
+    if (!state.expanded && dotProvider().id === id && win && !win.isDestroyed()) win.webContents.send('frame', now.url);
+    return;
+  }
   broadcast();
-  if (now?.kind !== 'frame' || before?.kind !== 'frame') settingsWin?.webContents.send('settings:avatars');
+  settingsWin?.webContents.send('settings:avatars');
 }
 
 ipcMain.on('web:avatar', (e, a) => {
